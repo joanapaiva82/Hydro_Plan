@@ -3,668 +3,295 @@ import datetime
 import pandas as pd
 import plotly.express as px
 import json
-from uuid import uuid4
-from typing import List, Dict, Optional
 
-# Constants
-DEFAULT_SURVEY_SPEED = 5.0  # knots
-DEFAULT_WEATHER_DOWNTIME = 15  # percentage
-COLOR_MAP = {
-    "Survey": "#2E86AB",
-    "Task": "#F18F01",
-    "Maintenance": "#A23B72",
-    "Weather": "#3B1F2B",
-    "Transit": "#3D5A6C",
-    "Delay": "#DB504A"
-}
+st.set_page_config(page_title="Hydrographic Survey Estimator", layout="wide")
 
-# --- Custom Theme and CSS ---
-st.set_page_config(
-    page_title="Hydrographic Survey Estimator Pro",
-    layout="wide",
-    page_icon="🌊"
-)
-
+# --- Custom Dark Theme and CSS Fixes ---
 st.markdown("""
     <style>
-        :root {
-            --primary: #1E40AF;
-            --secondary: #0b1d3a;
-            --accent: #1d4ed8;
-        }
         html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
-            background-color: var(--secondary) !important;
-            color: white !important;
+            background-color: #0b1d3a !important;
+        }
+        section.main {
+            background-color: #0b1d3a !important;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            color: #ffffff !important;
+            font-weight: 700;
+        }
+        .stForm label,
+        div[data-testid="stForm"] label,
+        div[data-baseweb="form-control"] label {
+            display: none !important;
+        }
+        .stTextInput input, .stNumberInput input, .stDateInput input {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+        }
+        .stSelectbox div[data-baseweb="select"] {
+            background-color: #ffffff !important;
+            color: #000000 !important;
         }
         .stForm {
-            background-color: rgba(255, 255, 255, 0.1);
+            background-color: #ffffff;
             border-radius: 10px;
             padding: 20px;
             margin-bottom: 20px;
-            border-left: 4px solid var(--accent);
         }
         .stButton > button {
-            background-color: var(--primary);
+            background-color: #1e40af;
             color: white;
-            border: none;
-            transition: all 0.3s;
         }
         .stButton > button:hover {
-            background-color: var(--accent);
-            transform: translateY(-1px);
+            background-color: #1d4ed8;
         }
-        .stAlert {
-            background-color: rgba(30, 58, 138, 0.5) !important;
-            border-left: 4px solid var(--accent);
+        .stMarkdown p, .stMarkdown ul, .stMarkdown li, .stMarkdown strong {
+            color: #ffffff !important;
         }
-        .tooltip-icon {
-            color: var(--accent);
-            cursor: help;
-        }
-        .vessel-card {
-            background: rgba(30, 64, 175, 0.2);
+        div[data-testid="stAlert"] {
+            color: #ffffff !important;
+            background-color: #1e3a8a !important;
             border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-left: 4px solid var(--accent);
-            transition: all 0.3s;
+            font-weight: 500;
         }
-        .vessel-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        div[data-testid="stAlert"] > div {
+            color: #ffffff !important;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# --- Data Models ---
-class Vessel:
-    def __init__(self, name: str, line_km: float, speed: float, start_date: datetime.date,
-                 transit_days: float, weather_days: float, maintenance_days: float):
-        self.id = str(uuid4())
-        self.name = name
-        self.line_km = line_km
-        self.speed = speed
-        self.start_date = start_date
-        self.transit_days = transit_days
-        self.weather_days = weather_days
-        self.maintenance_days = maintenance_days
-        
-        # Calculated properties
-        self.survey_days = self.calculate_survey_days()
-        self.total_days = self.calculate_total_days()
-        self.end_date = self.calculate_end_date()
-        self.daily_progress = self.line_km / self.total_days if self.total_days > 0 else 0
-    
-    def calculate_survey_days(self) -> float:
-        """Calculate required survey days based on line km and speed"""
-        return round(self.line_km / (self.speed * 24), 2)
-    
-    def calculate_total_days(self) -> float:
-        """Calculate total project days including contingencies"""
-        return round(self.survey_days + self.transit_days + self.weather_days + self.maintenance_days, 2)
-    
-    def calculate_end_date(self) -> datetime.date:
-        """Calculate end date based on start date and total days"""
-        return self.start_date + datetime.timedelta(days=self.total_days)
-    
-    def to_dict(self) -> Dict:
-        return {
-            "id": self.id,
-            "name": self.name,
-            "line_km": self.line_km,
-            "speed": self.speed,
-            "start_date": str(self.start_date),
-            "survey_days": self.survey_days,
-            "transit_days": self.transit_days,
-            "weather_days": self.weather_days,
-            "maintenance_days": self.maintenance_days,
-            "total_days": self.total_days,
-            "end_date": str(self.end_date),
-            "daily_progress": self.daily_progress
-        }
+# --- Init Session State ---
+if "vessels" not in st.session_state: st.session_state.vessels = []
+if "tasks" not in st.session_state: st.session_state.tasks = []
 
-class Task:
-    def __init__(self, name: str, task_type: str, start_date: datetime.date, end_date: datetime.date,
-                 vessel_id: Optional[str] = None, pause_survey: bool = False, cost: float = 0):
-        self.id = str(uuid4())
-        self.name = name
-        self.type = task_type
-        self.start_date = start_date
-        self.end_date = end_date
-        self.vessel_id = vessel_id
-        self.pause_survey = pause_survey
-        self.cost = cost
-    
-    def to_dict(self) -> Dict:
-        return {
-            "id": self.id,
-            "name": self.name,
-            "type": self.type,
-            "start_date": str(self.start_date),
-            "end_date": str(self.end_date),
-            "vessel_id": self.vessel_id,
-            "pause_survey": self.pause_survey,
-            "cost": self.cost
-        }
+st.title("🌊 Hydrographic Survey Estimator")
 
-# --- Session State Initialization ---
-def init_session_state():
-    if "vessels" not in st.session_state:
-        st.session_state.vessels = []
-    if "tasks" not in st.session_state:
-        st.session_state.tasks = []
-    if "project_name" not in st.session_state:
-        st.session_state.project_name = ""
-    if "unsurveyed_km" not in st.session_state:
-        st.session_state.unsurveyed_km = 0.0
-    if "surveyed_km" not in st.session_state:
-        st.session_state.surveyed_km = 0.0
-    if "weather_factor" not in st.session_state:
-        st.session_state.weather_factor = DEFAULT_WEATHER_DOWNTIME
-    if "day_rate" not in st.session_state:
-        st.session_state.day_rate = 25000  # USD
+# --- Project Info ---
+st.subheader("📁 Project Information")
+col1, col2, col3 = st.columns([3, 2, 2])
+with col1:
+    st.markdown("**Project Name**", unsafe_allow_html=True)
+    project_name = st.text_input("", placeholder="e.g. Australia West Survey")
+with col2:
+    st.markdown("**Unsurveyed Line Km**", unsafe_allow_html=True)
+    unsurveyed_km = st.number_input("", min_value=0.0, step=0.1)
+with col3:
+    st.markdown("**Surveyed Line Km**", unsafe_allow_html=True)
+    surveyed_km = st.number_input("", value=0.0, step=0.1, disabled=True)
 
-init_session_state()
-
-# --- Helper Functions ---
-def validate_vessel(name: str) -> List[str]:
-    """Validate vessel data before adding"""
-    errors = []
-    if not name.strip():
-        errors.append("Vessel name cannot be empty")
-    if any(v['name'] == name for v in st.session_state.vessels):
-        errors.append(f"Vessel '{name}' already exists")
-    return errors
-
-def validate_task(task: Dict) -> List[str]:
-    """Validate task data before adding"""
-    errors = []
-    if not task['name'].strip():
-        errors.append("Task name cannot be empty")
-    
-    if pd.to_datetime(task['start_date']) > pd.to_datetime(task['end_date']):
-        errors.append("End date must be after start date")
-    
-    if task['vessel_id']:
-        vessel = next((v for v in st.session_state.vessels if v['id'] == task['vessel_id']), None)
-        if vessel:
-            vessel_start = pd.to_datetime(vessel['start_date'])
-            vessel_end = pd.to_datetime(vessel['end_date'])
-            task_start = pd.to_datetime(task['start_date'])
-            task_end = pd.to_datetime(task['end_date'])
-            
-            if task_start < vessel_start or task_end > vessel_end:
-                errors.append("Task dates outside vessel's operational period")
-    
-    return errors
-
-def calculate_project_progress() -> float:
-    """Calculate overall project progress"""
-    total_surveyed = sum(v['line_km'] for v in st.session_state.vessels)
-    if st.session_state.unsurveyed_km > 0:
-        return min(100, (total_surveyed / st.session_state.unsurveyed_km) * 100)
-    return 0.0
-
-def calculate_project_cost() -> float:
-    """Calculate total project cost"""
-    vessel_days = sum(v['total_days'] for v in st.session_state.vessels)
-    task_costs = sum(t['cost'] for t in st.session_state.tasks)
-    return (vessel_days * st.session_state.day_rate) + task_costs
-
-def build_timeline_data() -> pd.DataFrame:
-    """Build timeline data for Gantt chart"""
-    timeline_data = []
-    
-    # Add vessel survey periods
-    for vessel in st.session_state.vessels:
-        survey_start = pd.to_datetime(vessel['start_date'])
-        survey_end = pd.to_datetime(vessel['end_date'])
-        
-        # Get tasks that pause survey for this vessel
-        pauses = [t for t in st.session_state.tasks 
-                 if t['vessel_id'] == vessel['id'] and t['pause_survey']]
-        pauses = sorted(pauses, key=lambda t: pd.to_datetime(t['start_date']))
-        
-        if not pauses:
-            timeline_data.append({
-                "Task": f"Survey: {vessel['name']}",
-                "Start": survey_start,
-                "Finish": survey_end,
-                "Resource": vessel['name'],
-                "Type": "Survey",
-                "Details": f"{vessel['line_km']} km at {vessel['speed']} knots",
-                "Progress": 100
-            })
-        else:
-            # Handle survey segments around pauses
-            current_start = survey_start
-            for pause in pauses:
-                pause_start = pd.to_datetime(pause['start_date'])
-                pause_end = pd.to_datetime(pause['end_date'])
-                
-                if pause_start > current_start:
-                    timeline_data.append({
-                        "Task": f"Survey: {vessel['name']}",
-                        "Start": current_start,
-                        "Finish": pause_start,
-                        "Resource": vessel['name'],
-                        "Type": "Survey",
-                        "Details": f"{vessel['line_km']} km at {vessel['speed']} knots",
-                        "Progress": 100
-                    })
-                
-                # Add the pause period
-                timeline_data.append({
-                    "Task": pause['name'],
-                    "Start": pause_start,
-                    "Finish": pause_end,
-                    "Resource": vessel['name'],
-                    "Type": pause['type'],
-                    "Details": pause.get('notes', ''),
-                    "Progress": 0
-                })
-                
-                current_start = pause_end
-            
-            # Add remaining survey period after last pause
-            if current_start < survey_end:
-                timeline_data.append({
-                    "Task": f"Survey: {vessel['name']}",
-                    "Start": current_start,
-                    "Finish": survey_end,
-                    "Resource": vessel['name'],
-                    "Type": "Survey",
-                    "Details": f"{vessel['line_km']} km at {vessel['speed']} knots",
-                    "Progress": 100
-                })
-    
-    # Add standalone tasks
-    for task in [t for t in st.session_state.tasks if not t['vessel_id']]:
-        timeline_data.append({
-            "Task": task['name'],
-            "Start": pd.to_datetime(task['start_date']),
-            "Finish": pd.to_datetime(task['end_date']),
-            "Resource": "Unassigned",
-            "Type": task['type'],
-            "Details": task.get('notes', ''),
-            "Progress": 0
-        })
-    
-    return pd.DataFrame(timeline_data)
-
-# --- UI Components ---
-def show_project_header():
-    """Display project header with key metrics"""
-    st.title("🌊 Hydrographic Survey Estimator Pro")
-    
-    progress = calculate_project_progress()
-    total_cost = calculate_project_cost()
-    total_days = sum(v['total_days'] for v in st.session_state.vessels)
-    
-    col1, col2, col3, col4 = st.columns(4)
+# --- Add Vessel ---
+st.subheader("🚢 Add Vessel")
+with st.form("vessel_form"):
+    col1, col2 = st.columns([3, 2])
     with col1:
-        st.metric("Project Progress", f"{progress:.1f}%")
+        st.markdown("**Vessel Name**", unsafe_allow_html=True)
+        vessel_name = st.text_input("", placeholder="e.g. Orca Explorer")
     with col2:
-        st.metric("Surveyed Line Km", f"{sum(v['line_km'] for v in st.session_state.vessels):.1f} km")
+        st.markdown("**Line Km**", unsafe_allow_html=True)
+        line_km = st.number_input("", min_value=0.0, step=1.0)
+
+    col3, col4 = st.columns(2)
     with col3:
-        st.metric("Estimated Duration", f"{total_days:.1f} days")
+        st.markdown("**Speed (knots)**", unsafe_allow_html=True)
+        speed = st.number_input("", min_value=0.1, step=0.1)
     with col4:
-        st.metric("Estimated Cost", f"${total_cost:,.2f}")
-    
-    st.progress(progress / 100)
+        st.markdown("**Survey Start Date**", unsafe_allow_html=True)
+        start_date = st.date_input("", value=datetime.date.today())
 
-def vessel_form():
-    """Form for adding new vessels"""
-    with st.expander("🚢 Add New Vessel", expanded=False):
-        with st.form("vessel_form"):
-            col1, col2 = st.columns([3, 2])
-            with col1:
-                vessel_name = st.text_input("Vessel Name*", placeholder="e.g. Orca Explorer")
-            help_icon("Unique name for the survey vessel")
-            line_km = st.number_input("Line Km*", min_value=0.0, step=1.0, value=100.0)
-                help_icon("Total kilometers to be surveyed by this vessel")
-            
-            with col2:
-                speed = st.number_input("Speed (knots)*", min_value=0.1, step=0.1, value=DEFAULT_SURVEY_SPEED)
-                help_icon("Average survey speed in knots")
-                start_date = st.date_input("Start Date*", value=datetime.date.today())
-                help_icon("Planned start date for survey operations")
-            
-            st.markdown("**Contingency Days**")
-            col3, col4, col5 = st.columns(3)
-            with col3:
-                transit_days = st.number_input("Transit Days", min_value=0.0, step=0.5, value=2.0)
-                help_icon("Days required for vessel transit to/from survey area")
-            with col4:
-                weather_days = st.number_input("Weather Days", min_value=0.0, step=0.5, value=3.0)
-                help_icon("Estimated weather downtime based on historical data")
-            with col5:
-                maintenance_days = st.number_input("Maintenance Days", min_value=0.0, step=0.5, value=1.0)
-                help_icon("Scheduled maintenance and equipment checks")
-            
-            if st.form_submit_button("Add Vessel"):
-                errors = validate_vessel(vessel_name)
-                if errors:
-                    for error in errors:
-                        st.error(error)
-                else:
-                    vessel = Vessel(
-                        name=vessel_name,
-                        line_km=line_km,
-                        speed=speed,
-                        start_date=start_date,
-                        transit_days=transit_days,
-                        weather_days=weather_days,
-                        maintenance_days=maintenance_days
-                    )
-                    st.session_state.vessels.append(vessel.to_dict())
-                    st.success(f"Vessel '{vessel_name}' added successfully!")
-                    st.session_state.surveyed_km += line_km
+    col5, col6, col7 = st.columns(3)
+    with col5:
+        st.markdown("**Transit Days**", unsafe_allow_html=True)
+        transit_days = st.number_input("", min_value=0.0, step=0.5)
+    with col6:
+        st.markdown("**Weather Days**", unsafe_allow_html=True)
+        weather_days = st.number_input("", min_value=0.0, step=0.5)
+    with col7:
+        st.markdown("**Maintenance Days**", unsafe_allow_html=True)
+        maintenance_days = st.number_input("", min_value=0.0, step=0.5)
 
-def task_form():
-    """Form for adding new tasks"""
-    with st.expander("📝 Add New Task", expanded=False):
-        with st.form("task_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                task_name = st.text_input("Task Name*", placeholder="e.g. Sediment Sampling")
-                help_icon("Descriptive name for the task")
-                task_type = st.selectbox(
-                    "Task Type*",
-                    ["Survey", "Maintenance", "Weather", "Transit", "Delay", "Other"],
-                    index=0
-                )
-                help_icon("Category of task for reporting and visualization")
-            
-            with col2:
-                start_date = st.date_input("Start Date*", value=datetime.date.today())
-                help_icon("Planned start date for the task")
-                end_date = st.date_input("End Date*", value=datetime.date.today() + datetime.timedelta(days=1))
-                help_icon("Planned completion date for the task")
-            
-            col3, col4 = st.columns(2)
-            with col3:
-                vessel_options = [("Unassigned", None)] + [(v['name'], v['id']) for v in st.session_state.vessels]
-                selected_vessel = st.selectbox(
-                    "Assigned Vessel",
-                    vessel_options,
-                    format_func=lambda x: x[0],
-                    index=0
-                )
-                vessel_id = selected_vessel[1]
-                help_icon("Vessel responsible for this task (if applicable)")
-            
-            with col4:
-                pause_survey = st.checkbox("Pause Survey Operations", value=False)
-                help_icon("Does this task pause the vessel's survey operations?")
-                cost = st.number_input("Estimated Cost (USD)", min_value=0.0, value=0.0, step=1000.0)
-                help_icon("Additional cost associated with this task")
-            
-            if st.form_submit_button("Add Task"):
-                task = {
-                    "name": task_name,
-                    "type": task_type,
-                    "start_date": str(start_date),
-                    "end_date": str(end_date),
-                    "vessel_id": vessel_id,
-                    "pause_survey": pause_survey,
-                    "cost": cost
-                }
-                
-                errors = validate_task(task)
-                if errors:
-                    for error in errors:
-                        st.error(error)
-                else:
-                    st.session_state.tasks.append(task)
-                    st.success(f"Task '{task_name}' added successfully!")
+    if st.form_submit_button("Add Vessel"):
+        survey_days = line_km / (speed * 24)
+        total_days = survey_days + transit_days + weather_days + maintenance_days
+        end_date = start_date + datetime.timedelta(days=total_days)
+        st.session_state.vessels.append({
+            "name": vessel_name,
+            "line_km": line_km,
+            "speed": speed,
+            "start_date": str(start_date),
+            "survey_days": round(survey_days, 2),
+            "transit_days": transit_days,
+            "weather_days": weather_days,
+            "maintenance_days": maintenance_days,
+            "total_days": round(total_days, 2),
+            "end_date": str(end_date)
+        })
+        st.success(f"Vessel '{vessel_name}' added.")
 
-def help_icon(text: str):
-    """Display help icon with tooltip"""
-    st.markdown(f'<span class="tooltip-icon" title="{text}">ℹ️</span>', unsafe_allow_html=True)
+# --- Display Vessels ---
+st.subheader("📋 Added Vessels")
+if st.session_state.vessels:
+    for v in st.session_state.vessels:
+        st.markdown(f"""
+        **🛥 {v['name']}**
+        - Line Km: {v['line_km']}
+        - Speed: {v['speed']} knots
+        - Start: {v['start_date']} → End: {v['end_date']}
+        - Survey: {v['survey_days']} d, Transit: {v['transit_days']} d, Weather: {v['weather_days']} d, Maintenance: {v['maintenance_days']} d
+        - **Total:** {v['total_days']} days
+        """)
+else:
+    st.markdown("_No vessels added yet._")
 
-def show_vessels():
-    """Display all vessels with detailed information"""
-    if not st.session_state.vessels:
-        st.info("No vessels added yet. Add your first vessel to begin.")
-        return
-    
-    st.subheader("🚢 Vessel Fleet")
-    for vessel in st.session_state.vessels:
-        with st.container():
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.markdown(f"""
-                <div class="vessel-card">
-                    <h4>{vessel['name']}</h4>
-                    <p><strong>Survey:</strong> {vessel['line_km']} km | {vessel['speed']} knots | {vessel['survey_days']} days</p>
-                    <p><strong>Schedule:</strong> {vessel['start_date']} to {vessel['end_date']} ({vessel['total_days']} days total)</p>
-                    <p><strong>Contingencies:</strong> Transit: {vessel['transit_days']}d | Weather: {vessel['weather_days']}d | Maint: {vessel['maintenance_days']}d</p>
-                </div>
-                """, unsafe_allow_html=True)
-            with col2:
-                if st.button(f"Delete {vessel['name']}", key=f"del_{vessel['id']}"):
-                    st.session_state.vessels = [v for v in st.session_state.vessels if v['id'] != vessel['id']]
-                    st.session_state.surveyed_km -= vessel['line_km']
-                    st.rerun()
-
-def show_tasks():
-    """Display all tasks with filtering options"""
-    if not st.session_state.tasks:
-        st.info("No tasks added yet. Add your first task to begin.")
-        return
-    
-    st.subheader("📋 Task Register")
-    
-    # Filter options
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        filter_type = st.selectbox("Filter by Type", ["All"] + sorted(list(set(t['type'] for t in st.session_state.tasks)))
-    with col2:
-        filter_vessel = st.selectbox("Filter by Vessel", ["All"] + [v['name'] for v in st.session_state.vessels])
-    with col3:
-        filter_date = st.selectbox("Filter by Date", ["All", "Upcoming", "Past", "Current"])
-    
-    # Apply filters
-    filtered_tasks = st.session_state.tasks
-    if filter_type != "All":
-        filtered_tasks = [t for t in filtered_tasks if t['type'] == filter_type]
-    if filter_vessel != "All":
-        vessel_id = next((v['id'] for v in st.session_state.vessels if v['name'] == filter_vessel), None)
-        filtered_tasks = [t for t in filtered_tasks if t['vessel_id'] == vessel_id]
-    if filter_date != "All":
-        today = datetime.date.today()
-        if filter_date == "Upcoming":
-            filtered_tasks = [t for t in filtered_tasks if pd.to_datetime(t['start_date']).date() > today]
-        elif filter_date == "Past":
-            filtered_tasks = [t for t in filtered_tasks if pd.to_datetime(t['end_date']).date() < today]
-        elif filter_date == "Current":
-            filtered_tasks = [t for t in filtered_tasks if pd.to_datetime(t['start_date']).date() <= today <= pd.to_datetime(t['end_date']).date()]
-    
-    # Display tasks
-    for task in filtered_tasks:
-        vessel_name = next((v['name'] for v in st.session_state.vessels if v['id'] == task['vessel_id']), "Unassigned")
-        
-        col1, col2 = st.columns([4, 1])
-        with col1:
-            st.markdown(f"""
-            <div style="background: rgba(255,255,255,0.1); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <strong>{task['name']}</strong> ({task['type']})<br>
-                <small>{task['start_date']} to {task['end_date']} | Vessel: {vessel_name}</small><br>
-                {f"<small>Cost: ${task['cost']:,.2f}</small>" if task['cost'] > 0 else ""}
-                {"<small style='color: orange;'>⚠️ Pauses Survey</small>" if task['pause_survey'] else ""}
-            </div>
-            """, unsafe_allow_html=True)
-        with col2:
-            if st.button("Delete", key=f"del_task_{task['id']}"):
-                st.session_state.tasks = [t for t in st.session_state.tasks if t['id'] != task['id']]
-                st.rerun()
-
-def show_timeline():
-    """Display interactive Gantt chart"""
-    if not st.session_state.vessels and not st.session_state.tasks:
-        st.info("Add vessels and tasks to generate the project timeline")
-        return
-    
-    st.subheader("📊 Project Timeline")
-    
-    df = build_timeline_data()
-    if df.empty:
-        st.warning("No timeline data available")
-        return
-    
-    fig = px.timeline(
-        df,
-        x_start="Start",
-        x_end="Finish",
-        y="Resource",
-        color="Type",
-        color_discrete_map=COLOR_MAP,
-        hover_name="Task",
-        hover_data={"Details": True, "Progress": ":.0f%"},
-        title="Survey Project Timeline"
-    )
-    
-    fig.update_yaxes(autorange="reversed", title_text="")
-    fig.update_xaxes(title_text="Timeline")
-    fig.update_layout(
-        height=600,
-        plot_bgcolor="rgba(255,255,255,0.1)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        font_color="white",
-        legend_title_text="Activity Type",
-        hoverlabel=dict(
-            bgcolor="rgba(30, 64, 175, 0.8)",
-            font_size=12,
-            font_family="Arial"
-        )
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-def project_settings():
-    """Project configuration settings"""
-    with st.expander("⚙️ Project Settings", expanded=False):
-        col1, col2 = st.columns(2)
-        with col1:
-            st.session_state.project_name = st.text_input(
-                "Project Name",
-                value=st.session_state.project_name,
-                placeholder="e.g. Australia West Survey"
-            )
-            st.session_state.unsurveyed_km = st.number_input(
-                "Total Unsurveyed Line Km",
-                min_value=0.0,
-                value=st.session_state.unsurveyed_km,
-                step=1.0
-            )
-        with col2:
-            st.session_state.weather_factor = st.number_input(
-                "Weather Downtime Factor (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=st.session_state.weather_factor,
-                step=1.0
-            )
-            st.session_state.day_rate = st.number_input(
-                "Daily Vessel Rate (USD)",
-                min_value=0.0,
-                value=st.session_state.day_rate,
-                step=1000.0
-            )
-
-def data_management():
-    """Data import/export functionality"""
-    with st.expander("💾 Data Management", expanded=False):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**Export Project**")
-            export_name = st.text_input("Export filename", value=st.session_state.project_name or "survey_project")
-            
-            if st.button("Export to JSON"):
-                export_data = {
-                    "project_name": st.session_state.project_name,
-                    "unsurveyed_km": st.session_state.unsurveyed_km,
-                    "weather_factor": st.session_state.weather_factor,
-                    "day_rate": st.session_state.day_rate,
-                    "vessels": st.session_state.vessels,
-                    "tasks": st.session_state.tasks,
-                }
-                st.download_button(
-                    label="Download JSON",
-                    data=json.dumps(export_data, indent=2),
-                    file_name=f"{export_name}.json",
-                    mime="application/json"
-                )
-            
-            if st.button("Export to Excel"):
-                vessel_df = pd.DataFrame(st.session_state.vessels)
-                task_df = pd.DataFrame(st.session_state.tasks)
-                
-                with pd.ExcelWriter("survey_data.xlsx") as writer:
-                    vessel_df.to_excel(writer, sheet_name="Vessels", index=False)
-                    task_df.to_excel(writer, sheet_name="Tasks", index=False)
-                
-                with open("survey_data.xlsx", "rb") as f:
-                    st.download_button(
-                        label="Download Excel",
-                        data=f,
-                        file_name=f"{export_name}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-        
-        with col2:
-            st.markdown("**Import Project**")
-            uploaded_file = st.file_uploader(
-                "Upload project file",
-                type=["json", "xlsx"],
-                accept_multiple_files=False
-            )
-            
-            if uploaded_file and st.button("Import Data"):
-                try:
-                    if uploaded_file.name.endswith(".json"):
-                        data = json.load(uploaded_file)
-                        st.session_state.project_name = data.get("project_name", "")
-                        st.session_state.unsurveyed_km = data.get("unsurveyed_km", 0.0)
-                        st.session_state.weather_factor = data.get("weather_factor", DEFAULT_WEATHER_DOWNTIME)
-                        st.session_state.day_rate = data.get("day_rate", 25000)
-                        st.session_state.vessels = data.get("vessels", [])
-                        st.session_state.tasks = data.get("tasks", [])
-                        st.success("Project imported successfully from JSON!")
-                    
-                    elif uploaded_file.name.endswith(".xlsx"):
-                        xls = pd.ExcelFile(uploaded_file)
-                        
-                        if "Vessels" in xls.sheet_names:
-                            st.session_state.vessels = xls.parse("Vessels").to_dict(orient="records")
-                        
-                        if "Tasks" in xls.sheet_names:
-                            st.session_state.tasks = xls.parse("Tasks").to_dict(orient="records")
-                        
-                        st.success("Project data imported successfully from Excel!")
-                
-                except Exception as e:
-                    st.error(f"Error importing project: {str(e)}")
-
-# --- Main App Layout ---
-def main():
-    init_session_state()
-    show_project_header()
-    
-    project_settings()
-    data_management()
-    
+# --- Add Task ---
+st.subheader("📝 Add Task")
+with st.form("task_form"):
     col1, col2 = st.columns(2)
     with col1:
-        vessel_form()
-        show_vessels()
+        st.markdown("**Task Name**", unsafe_allow_html=True)
+        task_name = st.text_input("", placeholder="e.g. Sediment Sample")
     with col2:
-        task_form()
-        show_tasks()
-    
-    show_timeline()
+        st.markdown("**Task Type**", unsafe_allow_html=True)
+        task_type = st.selectbox("", ["General", "Survey", "Maintenance", "Weather", "Transit"])
 
-if __name__ == "__main__":
-    main()
+    col3, col4 = st.columns(2)
+    with col3:
+        st.markdown("**Start Date**", unsafe_allow_html=True)
+        task_start = st.date_input("", value=datetime.date.today())
+    with col4:
+        st.markdown("**End Date**", unsafe_allow_html=True)
+        task_end = st.date_input("", value=datetime.date.today() + datetime.timedelta(days=1))
+
+    col5, col6 = st.columns(2)
+    with col5:
+        st.markdown("**Assigned Vessel (optional)**", unsafe_allow_html=True)
+        assigned_vessel = st.selectbox("", [""] + [v["name"] for v in st.session_state.vessels])
+    with col6:
+        st.markdown("**Pause Survey?**", unsafe_allow_html=True)
+        pause_survey = st.selectbox("", ["No", "Yes"])
+
+    if st.form_submit_button("Add Task"):
+        st.session_state.tasks.append({
+            "name": task_name,
+            "type": task_type,
+            "start_date": str(task_start),
+            "end_date": str(task_end),
+            "vessel": assigned_vessel or None,
+            "pause_survey": pause_survey
+        })
+        st.success(f"Task '{task_name}' added.")
+
+# --- Display Tasks ---
+st.subheader("📌 Current Tasks")
+if st.session_state.tasks:
+    for t in st.session_state.tasks:
+        st.markdown(
+            f"<p><b>{t['name']}</b> ({t['type']}) | {t['start_date']} to {t['end_date']} | Vessel: {t.get('vessel', 'N/A')} | Pause: {t['pause_survey']}</p>",
+            unsafe_allow_html=True
+        )
+else:
+    st.markdown("_No tasks added yet._")
+
+# --- Save/Load Project ---
+st.subheader("💾 Save or Load Project")
+col1, col2 = st.columns(2)
+
+if col1.button("📤 Export Project (JSON)"):
+    export_data = {
+        "project_name": project_name,
+        "unsurveyed_km": unsurveyed_km,
+        "vessels": st.session_state.vessels,
+        "tasks": st.session_state.tasks,
+    }
+    st.download_button("Download JSON", data=json.dumps(export_data, indent=2), file_name="project.json")
+
+if col2.button("📤 Export Project (CSV Excel)"):
+    vessel_df = pd.DataFrame(st.session_state.vessels)
+    task_df = pd.DataFrame(st.session_state.tasks)
+    with pd.ExcelWriter("project_data.xlsx") as writer:
+        vessel_df.to_excel(writer, sheet_name="Vessels", index=False)
+        task_df.to_excel(writer, sheet_name="Tasks", index=False)
+    with open("project_data.xlsx", "rb") as f:
+        st.download_button("Download Excel", f, file_name="project_data.xlsx")
+
+uploaded_file = st.file_uploader("📥 Load Project (JSON or Excel)", type=["json", "xlsx"])
+if uploaded_file:
+    try:
+        if uploaded_file.name.endswith(".json"):
+            data = json.load(uploaded_file)
+            st.session_state.vessels.clear()
+            st.session_state.vessels.extend(data.get("vessels", []))
+            st.session_state.tasks.clear()
+            st.session_state.tasks.extend(data.get("tasks", []))
+            st.success("✅ Project loaded from JSON successfully!")
+        elif uploaded_file.name.endswith(".xlsx"):
+            xls = pd.ExcelFile(uploaded_file)
+            st.session_state.vessels = xls.parse("Vessels").to_dict(orient="records")
+            st.session_state.tasks = xls.parse("Tasks").to_dict(orient="records")
+            st.success("✅ Project loaded from Excel successfully!")
+    except Exception as e:
+        st.error(f"❌ Error loading project: {e}")
+
+# --- Build Timeline ---
+def build_timeline(vessels, tasks):
+    timeline_data = []
+    for task in tasks:
+        timeline_data.append({
+            "Type": f"Task: {task['name']}",
+            "Start": task["start_date"],
+            "End": task["end_date"],
+            "Group": task.get("vessel", "Unassigned"),
+            "Color": "Task"
+        })
+    for vessel in vessels:
+        survey_start = pd.to_datetime(vessel["start_date"])
+        survey_end = pd.to_datetime(vessel["end_date"])
+        pauses = [t for t in tasks if t.get("vessel") == vessel["name"] and t.get("pause_survey") == "Yes"]
+        pauses = sorted(pauses, key=lambda t: pd.to_datetime(t["start_date"]))
+        if not pauses:
+            timeline_data.append({
+                "Type": f"Survey: {vessel['name']}",
+                "Start": survey_start,
+                "End": survey_end,
+                "Group": vessel["name"],
+                "Color": "Survey"
+            })
+        else:
+            current_start = survey_start
+            for pause in pauses:
+                pause_start = pd.to_datetime(pause["start_date"])
+                pause_end = pd.to_datetime(pause["end_date"])
+                if pause_start > current_start:
+                    timeline_data.append({
+                        "Type": f"Survey (part): {vessel['name']}",
+                        "Start": current_start,
+                        "End": pause_start,
+                        "Group": vessel["name"],
+                        "Color": "Survey"
+                    })
+                current_start = pause_end
+            if current_start < survey_end:
+                timeline_data.append({
+                    "Type": f"Survey (resumed): {vessel['name']}",
+                    "Start": current_start,
+                    "End": survey_end + datetime.timedelta(days=len(pauses)),
+                    "Group": vessel["name"],
+                    "Color": "Survey"
+                })
+    return pd.DataFrame(timeline_data)
+
+# --- Show Gantt Chart ---
+st.subheader("📊 Project Timeline")
+df = build_timeline(st.session_state.vessels, st.session_state.tasks)
+if not df.empty:
+    fig = px.timeline(df, x_start="Start", x_end="End", y="Group", color="Color", text="Type")
+    fig.update_yaxes(autorange="reversed")
+    fig.update_layout(
+        height=600,
+        plot_bgcolor="#ffffff",
+        paper_bgcolor="#ffffff",
+        font_color="#000000",
+        title_font_size=20
+    )
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("No timeline data to display.")
