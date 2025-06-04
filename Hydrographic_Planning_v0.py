@@ -1,5 +1,5 @@
 # Hydrographic Survey Estimator Tool
-# Version: 1.4
+# Version: 1.5 (Full dark theme + white text contrast)
 # Developed by: Joana Paiva
 # Contact: joana.paiva82@outlook.com
 
@@ -9,10 +9,10 @@ import pandas as pd
 import plotly.express as px
 import json
 
-# --- Set page config FIRST ---
+# --- PAGE CONFIG MUST BE FIRST ---
 st.set_page_config(page_title="Hydrographic Survey Estimator", layout="wide")
 
-# --- Custom Full Dark Blue Theme with White Cards and Gantt ---
+# --- CUSTOM CSS DARK THEME + WHITE TEXT FIX ---
 st.markdown("""
     <style>
         html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
@@ -24,11 +24,13 @@ st.markdown("""
         }
 
         h1, h2, h3, h4, h5, h6 {
-            color: #ffffff;
+            color: #ffffff !important;
+            font-weight: 700;
         }
 
         label, .stTextInput > label, .stNumberInput > label, .stSelectbox > label, .stDateInput > label {
-            color: #cdd6f4 !important;
+            color: #ffffff !important;
+            font-weight: 500;
         }
 
         .stTextInput input, .stNumberInput input, .stDateInput input {
@@ -59,23 +61,23 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- App Title ---
+# --- APP TITLE ---
 st.title("🌊 Hydrographic Survey Estimator")
 
-# --- Session State ---
+# --- INIT SESSION STATE ---
 if "vessels" not in st.session_state:
     st.session_state.vessels = []
 if "tasks" not in st.session_state:
     st.session_state.tasks = []
 
-# --- Project Info ---
+# --- PROJECT INFO SECTION ---
 st.subheader("📁 Project Information")
 col1, col2, col3 = st.columns([3, 2, 2])
 project_name = col1.text_input("Project Name", placeholder="e.g. Australia West Survey")
 unsurveyed_km = col2.number_input("Unsurveyed Line Km", min_value=0.0, step=0.1)
 surveyed_km = col3.number_input("Surveyed Line Km", value=0.0, step=0.1, disabled=True)
 
-# --- Vessel Form ---
+# --- VESSEL FORM ---
 st.subheader("🛥️ Add Vessel")
 with st.form("vessel_form"):
     col1, col2 = st.columns([3, 2])
@@ -115,7 +117,7 @@ with st.form("vessel_form"):
             })
             st.success(f"Vessel '{vessel_name}' added!")
 
-# --- Display Vessels ---
+# --- DISPLAY VESSELS ---
 if st.session_state.vessels:
     st.subheader("📋 Added Vessels")
     for v in st.session_state.vessels:
@@ -128,7 +130,7 @@ if st.session_state.vessels:
         - **Total:** {v['total_days']} days
         """)
 
-# --- Task Form ---
+# --- TASK FORM ---
 st.subheader("📝 Add Task")
 with st.form("task_form"):
     col1, col2 = st.columns(2)
@@ -159,7 +161,7 @@ with st.form("task_form"):
             })
             st.success(f"Task '{task_name}' added.")
 
-# --- Display Tasks ---
+# --- DISPLAY TASKS ---
 if st.session_state.tasks:
     st.subheader("📌 Current Tasks")
     for t in st.session_state.tasks:
@@ -167,7 +169,7 @@ if st.session_state.tasks:
 else:
     st.info("No tasks added yet.")
 
-# --- Save / Load Project ---
+# --- SAVE / LOAD SECTION ---
 st.subheader("💾 Save or Load Project")
 col1, col2 = st.columns(2)
 
@@ -212,7 +214,7 @@ if uploaded_file:
     except Exception as e:
         st.error(f"❌ Error loading project: {e}")
 
-# --- Gantt Chart ---
+# --- GANTT CHART ---
 st.subheader("📊 Project Timeline")
 
 timeline_data = []
@@ -270,9 +272,9 @@ if timeline_data:
     fig.update_layout(
         height=600,
         title="Survey & Task Timeline",
-        plot_bgcolor="#ffffff",       # White chart background
-        paper_bgcolor="#ffffff",      # White border background
-        font_color="#000000",         # Black text
+        plot_bgcolor="#ffffff",
+        paper_bgcolor="#ffffff",
+        font_color="#000000",
         legend_title_text="",
         title_font_size=20
     )
