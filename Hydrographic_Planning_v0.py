@@ -9,7 +9,7 @@ from typing import List, Dict, Optional
 
 # Constants
 DEFAULT_SURVEY_SPEED = 5.0  # knots
-DEFAULT_WEATHER_DOWNTIME = 15.0  # percentage, as float
+DEFAULT_WEATHER_DOWNTIME = 15.0  # percentage
 COLOR_MAP = {
     "Survey": "#2E86AB",
     "Task": "#F18F01",
@@ -125,11 +125,35 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Sidebar ---
+def load_sample_data():
+    st.session_state.vessels = [
+        Vessel("Orca Explorer",   100.0, 5.0, datetime.date(2025, 6, 4), 2.0, 3.0, 1.0).to_dict(),
+        Vessel("Sea Hawk",        150.0, 4.5, datetime.date(2025, 6, 5), 1.5, 2.5, 0.5).to_dict()
+    ]
+    st.session_state.tasks = [
+        Task("Sediment Sampling", "Survey",      datetime.date(2025, 6, 4), datetime.date(2025, 6, 5),
+             st.session_state.vessels[0]["id"], True,  5000.0).to_dict(),
+        Task("Equipment Check",   "Maintenance", datetime.date(2025, 6, 6), datetime.date(2025, 6, 6),
+             st.session_state.vessels[1]["id"], False, 2000.0).to_dict()
+    ]
+    st.session_state.project_name = "Sample Survey"
+    st.session_state.unsurveyed_km = 250.0
+    calculate_surveyed_km()
+    # No need to rerun immediately; letting Streamlit re-render is sufficient.
+
+def reset_session():
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    init_session_state()
+    # Streamlit will re-render automatically once state is cleared.
+
+
+# Build the sidebar (buttons must capture their callbacks properly)
 st.sidebar.markdown('<div class="sidebar"><h3>Navigation</h3>', unsafe_allow_html=True)
 st.sidebar.button("Home")
 st.sidebar.button("Settings")
-st.sidebar.button("Load Sample Data", on_click=lambda: load_sample_data())
-st.sidebar.button("Reset", on_click=lambda: reset_session())
+st.sidebar.button("Load Sample Data", on_click=load_sample_data)
+st.sidebar.button("Reset", on_click=reset_session)
 st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
 # --- Data Models ---
@@ -148,16 +172,17 @@ class Vessel:
         self.total_days = self.calculate_total_days()
         self.end_date = self.calculate_end_date()
         self.daily_progress = self.line_km / self.total_days if self.total_days > 0 else 0
-    
+
     def calculate_survey_days(self) -> float:
+        # Survey days = total km / (knots * 24)
         return round(self.line_km / (self.speed * 24), 2)
-    
+
     def calculate_total_days(self) -> float:
         return round(self.survey_days + self.transit_days + self.weather_days + self.maintenance_days, 2)
-    
+
     def calculate_end_date(self) -> datetime.date:
         return self.start_date + datetime.timedelta(days=self.total_days)
-    
+
     def to_dict(self) -> Dict:
         return {
             "id": self.id,
@@ -185,7 +210,7 @@ class Task:
         self.vessel_id = vessel_id
         self.pause_survey = pause_survey
         self.cost = cost
-    
+
     def to_dict(self) -> Dict:
         return {
             "id": self.id,
@@ -206,34 +231,17 @@ def init_session_state():
         "project_name": "",
         "unsurveyed_km": 0.0,
         "surveyed_km": 0.0,
+        # Weather factor and day_rate must always be float initially
         "weather_factor": float(DEFAULT_WEATHER_DOWNTIME),
-        "day_rate": 25000.0
+        "day_rate": float(25000.0)
     }
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
 
-def load_sample_data():
-    st.session_state.vessels = [
-        Vessel("Orca Explorer", 100.0, 5.0, datetime.date(2025, 6, 4), 2.0, 3.0, 1.0).to_dict(),
-        Vessel("Sea Hawk", 150.0, 4.5, datetime.date(2025, 6, 5), 1.5, 2.5, 0.5).to_dict()
-    ]
-    st.session_state.tasks = [
-        Task("Sediment Sampling", "Survey", datetime.date(2025, 6, 4), datetime.date(2025, 6, 5), st.session_state.vessels[0]["id"], True, 5000.0).to_dict(),
-        Task("Equipment Check", "Maintenance", datetime.date(2025, 6, 6), datetime.date(2025, 6, 6), st.session_state.vessels[1]["id"], False, 2000.0).to_dict()
-    ]
-    st.session_state.project_name = "Sample Survey"
-    st.session_state.unsurveyed_km = 250.0
-    calculate_surveyed_km()
-    st.rerun()
-
-def reset_session():
-    init_session_state()
-    st.rerun()
-
 # --- Helper Functions ---
-def validate_vessel(name: str, line_km: float, speed: float, transit_days: float,
-                   weather_days: float, maintenance_days: float) -> List[str]:
+def validate_vessel(name: str, line_km: float, speed: float,
+                    transit_days: float, weather_days: float, maintenance_days: float) -> List[str]:
     errors = []
     if not name.strip():
         errors.append("Vessel name cannot be empty")
@@ -249,8 +257,6 @@ def validate_vessel(name: str, line_km: float, speed: float, transit_days: float
 
 def validate_task(task: Dict) -> List[str]:
     errors = []
-    if not task['name'].strip():
-        errors.append("Task name cannot be empty")
     start_date = pd.to_datetime(task['start_date']).date()
     end_date = pd.to_datetime(task['end_date']).date()
     if start_date > end_date:
@@ -271,8 +277,9 @@ def calculate_surveyed_km():
 
 def calculate_project_progress() -> float:
     total_surveyed = st.session_state.surveyed_km
-    if st.session_state.unsurveyed_km > 0:
-        return min(100, (total_surveyed / st.session_state.unsurveyed_km) * 100)
+    unsurveyed = st.session_state.unsurveyed_km
+    if unsurveyed > 0:
+        return min(100, (total_surveyed / unsurveyed) * 100)
     return 0.0
 
 def calculate_project_cost() -> float:
@@ -286,10 +293,13 @@ def build_timeline_data(vessels: List[Dict], tasks: List[Dict]) -> pd.DataFrame:
     for vessel in vessels:
         survey_start = pd.to_datetime(vessel['start_date'])
         survey_end = pd.to_datetime(vessel['end_date'])
+
+        # Gather any tasks that pause this vessel's survey
         pauses = sorted(
             [t for t in tasks if t['vessel_id'] == vessel['id'] and t['pause_survey']],
             key=lambda t: pd.to_datetime(t['start_date'])
         )
+
         current_start = survey_start
         for pause in pauses:
             pause_start = pd.to_datetime(pause['start_date'])
@@ -324,6 +334,7 @@ def build_timeline_data(vessels: List[Dict], tasks: List[Dict]) -> pd.DataFrame:
                 "Details": f"{vessel['line_km']} km at {vessel['speed']} knots",
                 "Progress": 100
             })
+    # Any unassigned tasks
     for task in [t for t in tasks if not t['vessel_id']]:
         timeline_data.append({
             "Task": task['name'],
@@ -343,7 +354,7 @@ def show_project_header():
     progress = calculate_project_progress()
     total_cost = calculate_project_cost()
     total_days = sum(v['total_days'] for v in st.session_state.vessels)
-    
+
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown('<div class="stMetric">', unsafe_allow_html=True)
@@ -361,41 +372,94 @@ def show_project_header():
 
 def vessel_form(edit_vessel: Optional[Dict] = None):
     is_edit = edit_vessel is not None
-    with st.expander(f"🚢 {'Edit Vessel' if is_edit else 'Add New Vessel'}", expanded=False):
-        with st.form(f"vessel_form_{edit_vessel['id'] if is_edit else 'new'}"):
+    header = "Edit Vessel" if is_edit else "Add New Vessel"
+    with st.expander(f"🚢 {header}", expanded=False):
+        form_key = f"vessel_form_{edit_vessel['id']}" if is_edit else "vessel_form_new"
+        with st.form(form_key):
             col1, col2 = st.columns([3, 2])
             with col1:
-                vessel_name = st.text_input("Vessel Name*", value=edit_vessel['name'] if is_edit else "", placeholder="e.g. Orca Explorer")
-                st.markdown('<span class="tooltip-icon" title="Unique name for the survey vessel">ℹ️</span>', unsafe_allow_html=True)
-                line_km = st.number_input("Line Km*", min_value=0.1, step=1.0, value=float(edit_vessel['line_km']) if is_edit else 100.0)
-                st.markdown('<span class="tooltip-icon" title="Total kilometers to be surveyed by this vessel">ℹ️</span>', unsafe_allow_html=True)
+                vessel_name = st.text_input(
+                    "Vessel Name*", 
+                    value=edit_vessel['name'] if is_edit else "", 
+                    placeholder="e.g. Orca Explorer"
+                )
+                st.markdown(
+                    '<span class="tooltip-icon" title="Unique name for the survey vessel">ℹ️</span>', 
+                    unsafe_allow_html=True
+                )
+                line_km = st.number_input(
+                    "Line Km*", 
+                    min_value=0.1, step=1.0, 
+                    value=float(edit_vessel['line_km']) if is_edit else 100.0
+                )
+                st.markdown(
+                    '<span class="tooltip-icon" title="Total kilometers to be surveyed by this vessel">ℹ️</span>', 
+                    unsafe_allow_html=True
+                )
             with col2:
-                speed = st.number_input("Speed (knots)*", min_value=0.1, step=0.1, value=float(edit_vessel['speed'] if is_edit else DEFAULT_SURVEY_SPEED))
-                st.markdown('<span class="tooltip-icon" title="Average survey speed in knots">ℹ️</span>', unsafe_allow_html=True)
-                start_date = st.date_input("Start Date*", value=pd.to_datetime(edit_vessel['start_date']).date() if is_edit else datetime.datetime.now().date())
-                st.markdown('<span class="tooltip-icon" title="Planned start date for survey operations">ℹ️</span>', unsafe_allow_html=True)
+                speed = st.number_input(
+                    "Speed (knots)*", 
+                    min_value=0.1, step=0.1,
+                    value=float(edit_vessel['speed']) if is_edit else DEFAULT_SURVEY_SPEED
+                )
+                st.markdown(
+                    '<span class="tooltip-icon" title="Average survey speed in knots">ℹ️</span>', 
+                    unsafe_allow_html=True
+                )
+                start_date = st.date_input(
+                    "Start Date*", 
+                    value=pd.to_datetime(edit_vessel['start_date']).date() if is_edit else datetime.date.today()
+                )
+                st.markdown(
+                    '<span class="tooltip-icon" title="Planned start date for survey operations">ℹ️</span>', 
+                    unsafe_allow_html=True
+                )
+
             st.markdown("**Contingency Days**")
             col3, col4, col5 = st.columns(3)
             with col3:
-                transit_days = st.number_input("Transit Days", min_value=0.0, step=0.5, value=float(edit_vessel['transit_days'] if is_edit else 2.0))
-                st.markdown('<span class="tooltip-icon" title="Days required for vessel transit to/from survey area">ℹ️</span>', unsafe_allow_html=True)
+                transit_days = st.number_input(
+                    "Transit Days", 
+                    min_value=0.0, step=0.5, 
+                    value=float(edit_vessel['transit_days']) if is_edit else 2.0
+                )
+                st.markdown(
+                    '<span class="tooltip-icon" title="Days required for vessel transit to/from survey area">ℹ️</span>', 
+                    unsafe_allow_html=True
+                )
             with col4:
-                weather_days = st.number_input("Weather Days", min_value=0.0, step=0.5, value=float(edit_vessel['weather_days'] if is_edit else 3.0))
-                st.markdown('<span class="tooltip-icon" title="Estimated weather downtime based on historical data">ℹ️</span>', unsafe_allow_html=True)
+                weather_days = st.number_input(
+                    "Weather Days", 
+                    min_value=0.0, step=0.5, 
+                    value=float(edit_vessel['weather_days']) if is_edit else 3.0
+                )
+                st.markdown(
+                    '<span class="tooltip-icon" title="Estimated weather downtime based on historical data">ℹ️</span>', 
+                    unsafe_allow_html=True
+                )
             with col5:
-                maintenance_days = st.number_input("Maintenance Days", min_value=0.0, step=0.5, value=float(edit_vessel['maintenance_days'] if is_edit else 1.0))
-                st.markdown('<span class="tooltip-icon" title="Scheduled maintenance and equipment checks">ℹ️</span>', unsafe_allow_html=True)
-            
-            submit_button = st.form_submit_button("Update Vessel" if is_edit else "Add Vessel")
+                maintenance_days = st.number_input(
+                    "Maintenance Days", 
+                    min_value=0.0, step=0.5, 
+                    value=float(edit_vessel['maintenance_days']) if is_edit else 1.0
+                )
+                st.markdown(
+                    '<span class="tooltip-icon" title="Scheduled maintenance and equipment checks">ℹ️</span>', 
+                    unsafe_allow_html=True
+                )
+
+            submit_btn_label = "Update Vessel" if is_edit else "Add Vessel"
+            submit_button = st.form_submit_button(submit_btn_label)
             if submit_button:
                 errors = validate_vessel(vessel_name, line_km, speed, transit_days, weather_days, maintenance_days)
                 if is_edit:
+                    # If editing, ignore “already exists” for this same vessel
                     errors = [e for e in errors if e != f"Vessel '{vessel_name}' already exists" or vessel_name != edit_vessel['name']]
                 if errors:
-                    for error in errors:
-                        st.error(error)
+                    for err in errors:
+                        st.error(err)
                 else:
-                    vessel = Vessel(
+                    vessel_obj = Vessel(
                         name=vessel_name,
                         line_km=line_km,
                         speed=speed,
@@ -407,50 +471,99 @@ def vessel_form(edit_vessel: Optional[Dict] = None):
                     )
                     if is_edit:
                         st.session_state.vessels = [v for v in st.session_state.vessels if v['id'] != edit_vessel['id']]
-                    st.session_state.vessels.append(vessel.to_dict())
+                    st.session_state.vessels.append(vessel_obj.to_dict())
                     st.success(f"Vessel '{vessel_name}' {'updated' if is_edit else 'added'} successfully!")
                     calculate_surveyed_km()
-                    st.rerun()
+                    st.experimental_rerun()  # only rerun after state change
 
 def task_form(edit_task: Optional[Dict] = None):
     is_edit = edit_task is not None
-    with st.expander(f"📝 {'Edit Task' if is_edit else 'Add New Task'}", expanded=False):
-        with st.form(f"task_form_{edit_task['id'] if is_edit else 'new'}"):
+    header = "Edit Task" if is_edit else "Add New Task"
+    with st.expander(f"📝 {header}", expanded=False):
+        form_key = f"task_form_{edit_task['id']}" if is_edit else "task_form_new"
+        with st.form(form_key):
             col1, col2 = st.columns(2)
             with col1:
-                task_name = st.text_input("Task Name*", value=edit_task['name'] if is_edit else "", placeholder="e.g. Sediment Sampling")
-                st.markdown('<span class="tooltip-icon" title="Descriptive name for the task">ℹ️</span>', unsafe_allow_html=True)
+                task_name = st.text_input(
+                    "Task Name*", 
+                    value=edit_task['name'] if is_edit else "", 
+                    placeholder="e.g. Sediment Sampling"
+                )
+                st.markdown(
+                    '<span class="tooltip-icon" title="Descriptive name for the task">ℹ️</span>', 
+                    unsafe_allow_html=True
+                )
                 task_type = st.selectbox(
                     "Task Type*",
                     ["Survey", "Maintenance", "Weather", "Transit", "Delay", "Other"],
-                    index=["Survey", "Maintenance", "Weather", "Transit", "Delay", "Other"].index(edit_task['type']) if is_edit else 0
+                    index=(["Survey", "Maintenance", "Weather", "Transit", "Delay", "Other"].index(edit_task['type']) if is_edit else 0)
                 )
-                st.markdown('<span class="tooltip-icon" title="Category of task for reporting and visualization">ℹ️</span>', unsafe_allow_html=True)
+                st.markdown(
+                    '<span class="tooltip-icon" title="Category of task for reporting and visualization">ℹ️</span>', 
+                    unsafe_allow_html=True
+                )
             with col2:
-                start_date = st.date_input("Start Date*", value=pd.to_datetime(edit_task['start_date']).date() if is_edit else datetime.datetime.now().date())
-                st.markdown('<span class="tooltip-icon" title="Planned start date for the task">ℹ️</span>', unsafe_allow_html=True)
-                end_date = st.date_input("End Date*", value=pd.to_datetime(edit_task['end_date']).date() if is_edit else datetime.datetime.now().date() + datetime.timedelta(days=1))
-                st.markdown('<span class="tooltip-icon" title="Planned completion date for the task">ℹ️</span>', unsafe_allow_html=True)
+                start_date = st.date_input(
+                    "Start Date*", 
+                    value=(pd.to_datetime(edit_task['start_date']).date() if is_edit else datetime.date.today())
+                )
+                st.markdown(
+                    '<span class="tooltip-icon" title="Planned start date for the task">ℹ️</span>', 
+                    unsafe_allow_html=True
+                )
+                end_date = st.date_input(
+                    "End Date*", 
+                    value=(pd.to_datetime(edit_task['end_date']).date() if is_edit else datetime.date.today() + datetime.timedelta(days=1))
+                )
+                st.markdown(
+                    '<span class="tooltip-icon" title="Planned completion date for the task">ℹ️</span>', 
+                    unsafe_allow_html=True
+                )
+
             col3, col4 = st.columns(2)
             with col3:
                 vessel_options = [("Unassigned", None)] + [(v['name'], v['id']) for v in st.session_state.vessels]
+                default_index = 0
+                if is_edit:
+                    for i, opt in enumerate(vessel_options):
+                        if opt[1] == edit_task['vessel_id']:
+                            default_index = i
+                            break
                 selected_vessel = st.selectbox(
                     "Assigned Vessel",
                     vessel_options,
-                    format_func=lambda x: x[0],
-                    index=next((i for i, opt in enumerate(vessel_options) if opt[1] == edit_task['vessel_id']), 0) if is_edit else 0
+                    index=default_index,
+                    format_func=lambda x: x[0]
                 )
                 vessel_id = selected_vessel[1]
-                st.markdown('<span class="tooltip-icon" title="Vessel responsible for this task (if applicable)">ℹ️</span>', unsafe_allow_html=True)
+                st.markdown(
+                    '<span class="tooltip-icon" title="Vessel responsible for this task (if applicable)">ℹ️</span>',
+                    unsafe_allow_html=True
+                )
             with col4:
-                pause_survey = st.checkbox("Pause Survey Operations", value=edit_task['pause_survey'] if is_edit else False)
-                st.markdown('<span class="tooltip-icon" title="Does this task pause the vessel\'s survey operations?">ℹ️</span>', unsafe_allow_html=True)
-                cost = st.number_input("Estimated Cost (USD)", min_value=0.0, value=float(edit_task['cost']) if is_edit else 0.0, step=1000.0)
-                st.markdown('<span class="tooltip-icon" title="Additional cost associated with this task">ℹ️</span>', unsafe_allow_html=True)
-            
-            submit_button = st.form_submit_button("Update Task" if is_edit else "Add Task")
+                pause_survey = st.checkbox(
+                    "Pause Survey Operations",
+                    value=(edit_task['pause_survey'] if is_edit else False)
+                )
+                st.markdown(
+                    '<span class="tooltip-icon" title="Does this task pause the vessel\'s survey operations?">ℹ️</span>', 
+                    unsafe_allow_html=True
+                )
+                cost = st.number_input(
+                    "Estimated Cost (USD)",
+                    min_value=0.0,
+                    value=float(edit_task['cost']) if is_edit else 0.0,
+                    step=1000.0
+                )
+                st.markdown(
+                    '<span class="tooltip-icon" title="Additional cost associated with this task">ℹ️</span>', 
+                    unsafe_allow_html=True
+                )
+
+            submit_btn_label = "Update Task" if is_edit else "Add Task"
+            submit_button = st.form_submit_button(submit_btn_label)
             if submit_button:
-                task = {
+                task_dict = {
                     "id": edit_task['id'] if is_edit else str(uuid4()),
                     "name": task_name,
                     "type": task_type,
@@ -460,16 +573,16 @@ def task_form(edit_task: Optional[Dict] = None):
                     "pause_survey": pause_survey,
                     "cost": cost
                 }
-                errors = validate_task(task)
+                errors = validate_task(task_dict)
                 if errors:
-                    for error in errors:
-                        st.error(error)
+                    for err in errors:
+                        st.error(err)
                 else:
                     if is_edit:
                         st.session_state.tasks = [t for t in st.session_state.tasks if t['id'] != edit_task['id']]
-                    st.session_state.tasks.append(task)
+                    st.session_state.tasks.append(task_dict)
                     st.success(f"Task '{task_name}' {'updated' if is_edit else 'added'} successfully!")
-                    st.rerun()
+                    st.experimental_rerun()  # only rerun after state change
 
 def show_vessels():
     if not st.session_state.vessels:
@@ -492,43 +605,45 @@ def show_vessels():
                 if st.button("✏️ Edit", key=f"edit_vessel_{vessel['id']}"):
                     vessel_form(vessel)
             with col3:
-                with st.form(f"delete_vessel_{vessel['id']}"):
-                    st.form_submit_button("🗑️ Delete", on_click=lambda: delete_vessel(vessel['id']))
+                # Capture vessel_id properly in lambda
+                if st.button("🗑️ Delete", key=f"delete_vessel_{vessel['id']}"):
+                    delete_vessel(vessel["id"])
 
 def delete_vessel(vessel_id: str):
     st.session_state.vessels = [v for v in st.session_state.vessels if v['id'] != vessel_id]
     st.session_state.tasks = [t for t in st.session_state.tasks if t['vessel_id'] != vessel_id]
     calculate_surveyed_km()
-    st.rerun()
+    st.experimental_rerun()
 
 def show_tasks():
     if not st.session_state.tasks:
         st.info("No tasks added yet. Add your first task to begin.")
         return
     st.subheader("📋 Task Register")
+
     col1, col2, col3 = st.columns(3)
     with col1:
-        filter_type = st.selectbox("Filter by Type", ["All"] + sorted(list(set(t['type'] for t in st.session_state.tasks))))
+        filter_type = st.selectbox("Filter by Type", ["All"] + sorted(list({t['type'] for t in st.session_state.tasks})))
     with col2:
         filter_vessel = st.selectbox("Filter by Vessel", ["All"] + [v['name'] for v in st.session_state.vessels])
     with col3:
         filter_date = st.selectbox("Filter by Date", ["All", "Upcoming", "Past", "Current"])
-    
-    filtered_tasks = st.session_state.tasks
+
+    filtered_tasks = st.session_state.tasks.copy()
     if filter_type != "All":
         filtered_tasks = [t for t in filtered_tasks if t['type'] == filter_type]
     if filter_vessel != "All":
         vessel_id = next((v['id'] for v in st.session_state.vessels if v['name'] == filter_vessel), None)
         filtered_tasks = [t for t in filtered_tasks if t['vessel_id'] == vessel_id]
     if filter_date != "All":
-        today = datetime.datetime.now().date()
+        today = datetime.date.today()
         if filter_date == "Upcoming":
             filtered_tasks = [t for t in filtered_tasks if pd.to_datetime(t['start_date']).date() > today]
         elif filter_date == "Past":
             filtered_tasks = [t for t in filtered_tasks if pd.to_datetime(t['end_date']).date() < today]
         elif filter_date == "Current":
             filtered_tasks = [t for t in filtered_tasks if pd.to_datetime(t['start_date']).date() <= today <= pd.to_datetime(t['end_date']).date()]
-    
+
     for task in filtered_tasks:
         vessel_name = next((v['name'] for v in st.session_state.vessels if v['id'] == task['vessel_id']), "Unassigned")
         col1, col2, col3 = st.columns([3, 1, 1])
@@ -545,12 +660,12 @@ def show_tasks():
             if st.button("✏️ Edit", key=f"edit_task_{task['id']}"):
                 task_form(task)
         with col3:
-            with st.form(f"delete_task_{task['id']}"):
-                st.form_submit_button("🗑️ Delete", on_click=lambda: delete_task(task['id']))
+            if st.button("🗑️ Delete", key=f"delete_task_{task['id']}"):
+                delete_task(task["id"])
 
 def delete_task(task_id: str):
     st.session_state.tasks = [t for t in st.session_state.tasks if t['id'] != task_id]
-    st.rerun()
+    st.experimental_rerun()
 
 def show_timeline():
     if not st.session_state.vessels and not st.session_state.tasks:
@@ -587,32 +702,37 @@ def show_timeline():
 
 def project_settings():
     with st.expander("⚙️ Project Settings", expanded=False):
+        # Bind the number_inputs directly to session_state keys to keep types consistent
         col1, col2 = st.columns(2)
         with col1:
-            st.session_state.project_name = st.text_input(
+            st.text_input(
                 "Project Name",
                 value=st.session_state.project_name,
-                placeholder="e.g. Australia West Survey"
+                placeholder="e.g. Australia West Survey",
+                key="project_name"
             )
-            st.session_state.unsurveyed_km = st.number_input(
+            st.number_input(
                 "Total Unsurveyed Line Km",
                 min_value=0.0,
-                value=float(st.session_state.unsurveyed_km),
-                step=1.0
+                value=st.session_state.unsurveyed_km,
+                step=1.0,
+                key="unsurveyed_km"
             )
         with col2:
-            st.session_state.weather_factor = st.number_input(
+            st.number_input(
                 "Weather Downtime Factor (%)",
                 min_value=0.0,
                 max_value=100.0,
-                value=float(st.session_state.weather_factor),
-                step=1.0
+                value=st.session_state.weather_factor,
+                step=1.0,
+                key="weather_factor"
             )
-            st.session_state.day_rate = st.number_input(
+            st.number_input(
                 "Daily Vessel Rate (USD)",
                 min_value=0.0,
-                value=float(st.session_state.day_rate),
-                step=1000.0
+                value=st.session_state.day_rate,
+                step=1000.0,
+                key="day_rate"
             )
 
 def data_management():
@@ -672,9 +792,13 @@ def data_management():
                         st.session_state.weather_factor = float(data["weather_factor"])
                         st.session_state.day_rate = float(data["day_rate"])
                         st.session_state.vessels = [
-                            {**v, "line_km": float(v["line_km"]), "speed": float(v["speed"]),
-                             "transit_days": float(v["transit_days"]), "weather_days": float(v["weather_days"]),
-                             "maintenance_days": float(v["maintenance_days"])}
+                            {**v,
+                             "line_km": float(v["line_km"]),
+                             "speed": float(v["speed"]),
+                             "transit_days": float(v["transit_days"]),
+                             "weather_days": float(v["weather_days"]),
+                             "maintenance_days": float(v["maintenance_days"])
+                            }
                             for v in data["vessels"]
                             if all(k in v for k in ["id", "name", "line_km", "speed", "start_date", "transit_days", "weather_days", "maintenance_days"])
                         ]
@@ -685,6 +809,7 @@ def data_management():
                         ]
                         calculate_surveyed_km()
                         st.success("Project imported successfully from JSON!")
+                        st.experimental_rerun()
                     elif uploaded_file.name.endswith(".xlsx"):
                         xls = pd.ExcelFile(uploaded_file)
                         if "Vessels" in xls.sheet_names:
@@ -695,11 +820,11 @@ def data_management():
                                 "transit_days": float,
                                 "weather_days": float,
                                 "maintenance_days": float
-                            }, errors='ignore')
+                            }, errors="ignore")
                             st.session_state.vessels = vessels_df.to_dict(orient="records")
                         if "Tasks" in xls.sheet_names:
                             tasks_df = xls.parse("Tasks")
-                            tasks_df = tasks_df.astype({"cost": float}, errors='ignore')
+                            tasks_df = tasks_df.astype({"cost": float}, errors="ignore")
                             st.session_state.tasks = tasks_df.to_dict(orient="records")
                         if "Settings" in xls.sheet_names:
                             settings = xls.parse("Settings").iloc[0].to_dict()
@@ -709,15 +834,17 @@ def data_management():
                             st.session_state.day_rate = float(settings.get("day_rate", 25000.0))
                         calculate_surveyed_km()
                         st.success("Project data imported successfully from Excel!")
+                        st.experimental_rerun()
                 except Exception as e:
                     st.error(f"Error importing project: {str(e)}")
 
 # --- Main App Layout ---
 def main():
-    init_session_state()
+    init_session_state()  # ensure every key exists before any widget
     show_project_header()
     project_settings()
     data_management()
+
     col1, col2 = st.columns(2)
     with col1:
         vessel_form()
@@ -725,6 +852,7 @@ def main():
     with col2:
         task_form()
         show_tasks()
+
     show_timeline()
 
 if __name__ == "__main__":
