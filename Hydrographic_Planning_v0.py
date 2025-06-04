@@ -4,8 +4,8 @@ import pandas as pd
 import plotly.express as px
 import json
 from uuid import uuid4
-from typing import List, Dict, Optional
 from io import BytesIO
+from typing import List, Dict, Optional
 
 # Constants
 DEFAULT_SURVEY_SPEED = 5.0  # knots
@@ -28,42 +28,65 @@ st.set_page_config(
 )
 
 st.markdown("""
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         :root {
             --primary: #1E40AF;
-            --secondary: #0b1d3a;
-            --accent: #1d4ed8;
+            --secondary: #0B1D3A;
+            --accent: #1D4ED8;
+            --gradient: linear-gradient(135deg, #1E40AF, #3B82F6);
         }
         html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
-            background-color: var(--secondary) !important;
-            color: white !important;
+            background: var(--secondary);
+            color: white;
+            font-family: 'Arial', sans-serif;
         }
-        .stForm {
-            background-color: rgba(255, 255, 255, 0.1);
+        .stHeader {
+            background: var(--gradient);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            animation: fadeIn 1s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .stMetric {
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 8px;
+            transition: transform 0.3s;
+        }
+        .stMetric:hover {
+            transform: scale(1.02);
+        }
+        .stForm, .stExpander {
+            background: rgba(255,255,255,0.1);
             border-radius: 10px;
             padding: 20px;
-            margin-bottom: 20px;
             border-left: 4px solid var(--accent);
+            margin-bottom: 20px;
         }
         .stButton > button {
-            background-color: var(--primary);
+            background: var(--gradient);
             color: white;
             border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
             transition: all 0.3s;
         }
         .stButton > button:hover {
-            background-color: var(--accent);
-            transform: translateY(-1px);
+            background: linear-gradient(135deg, #3B82F6, #1E40AF);
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
         .stAlert {
-            background-color: rgba(30, 58, 138, 0.5) !important;
+            background: rgba(30, 58, 138, 0.5);
             border-left: 4px solid var(--accent);
+            border-radius: 5px;
         }
-        .tooltip-icon {
-            color: var(--accent);
-            cursor: help;
-        }
-        .vessel-card {
+        .card {
             background: rgba(30, 64, 175, 0.2);
             border-radius: 8px;
             padding: 15px;
@@ -71,12 +94,43 @@ st.markdown("""
             border-left: 4px solid var(--accent);
             transition: all 0.3s;
         }
-        .vessel-card:hover {
+        .card:hover {
             transform: translateY(-3px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
+        .tooltip-icon {
+            color: var(--accent);
+            cursor: help;
+            margin-left: 5px;
+        }
+        .progress-bar {
+            height: 20px;
+            background: #3B82F6;
+            border-radius: 10px;
+            animation: progress 2s ease-out;
+        }
+        @keyframes progress {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+        .sidebar {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 10px;
+            height: 100vh;
+            position: fixed;
+            width: 200px;
+        }
     </style>
 """, unsafe_allow_html=True)
+
+# --- Sidebar ---
+st.sidebar.markdown('<div class="sidebar"><h3>Navigation</h3>', unsafe_allow_html=True)
+st.sidebar.button("Home")
+st.sidebar.button("Settings")
+st.sidebar.button("Load Sample Data", on_click=lambda: load_sample_data())
+st.sidebar.button("Reset", on_click=lambda: reset_session())
+st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
 # --- Data Models ---
 class Vessel:
@@ -159,6 +213,24 @@ def init_session_state():
         if key not in st.session_state:
             st.session_state[key] = value
 
+def load_sample_data():
+    st.session_state.vessels = [
+        Vessel("Orca Explorer", 100.0, 5.0, datetime.date(2025, 6, 4), 2.0, 3.0, 1.0).to_dict(),
+        Vessel("Sea Hawk", 150.0, 4.5, datetime.date(2025, 6, 5), 1.5, 2.5, 0.5).to_dict()
+    ]
+    st.session_state.tasks = [
+        Task("Sediment Sampling", "Survey", datetime.date(2025, 6, 4), datetime.date(2025, 6, 5), st.session_state.vessels[0]["id"], True, 5000.0).to_dict(),
+        Task("Equipment Check", "Maintenance", datetime.date(2025, 6, 6), datetime.date(2025, 6, 6), st.session_state.vessels[1]["id"], False, 2000.0).to_dict()
+    ]
+    st.session_state.project_name = "Sample Survey"
+    st.session_state.unsurveyed_km = 250.0
+    calculate_surveyed_km()
+    st.rerun()
+
+def reset_session():
+    init_session_state()
+    st.rerun()
+
 # --- Helper Functions ---
 def validate_vessel(name: str, line_km: float, speed: float, transit_days: float,
                    weather_days: float, maintenance_days: float) -> List[str]:
@@ -218,51 +290,40 @@ def build_timeline_data(vessels: List[Dict], tasks: List[Dict]) -> pd.DataFrame:
             [t for t in tasks if t['vessel_id'] == vessel['id'] and t['pause_survey']],
             key=lambda t: pd.to_datetime(t['start_date'])
         )
-        if not pauses:
+        current_start = survey_start
+        for pause in pauses:
+            pause_start = pd.to_datetime(pause['start_date'])
+            pause_end = pd.to_datetime(pause['end_date'])
+            if pause_start > current_start:
+                timeline_data.append({
+                    "Task": f"Survey: {vessel['name']}",
+                    "Start": current_start,
+                    "Finish": pause_start,
+                    "Resource": vessel['name'],
+                    "Type": "Survey",
+                    "Details": f"{vessel['line_km']} km at {vessel['speed']} knots",
+                    "Progress": 100
+                })
+            timeline_data.append({
+                "Task": pause['name'],
+                "Start": pause_start,
+                "Finish": pause_end,
+                "Resource": vessel['name'],
+                "Type": pause['type'],
+                "Details": pause.get('notes', ''),
+                "Progress": 0
+            })
+            current_start = pause_end
+        if current_start < survey_end:
             timeline_data.append({
                 "Task": f"Survey: {vessel['name']}",
-                "Start": survey_start,
+                "Start": current_start,
                 "Finish": survey_end,
                 "Resource": vessel['name'],
                 "Type": "Survey",
                 "Details": f"{vessel['line_km']} km at {vessel['speed']} knots",
                 "Progress": 100
             })
-        else:
-            current_start = survey_start
-            for pause in pauses:
-                pause_start = pd.to_datetime(pause['start_date'])
-                pause_end = pd.to_datetime(pause['end_date'])
-                if pause_start > current_start:
-                    timeline_data.append({
-                        "Task": f"Survey: {vessel['name']}",
-                        "Start": current_start,
-                        "Finish": pause_start,
-                        "Resource": vessel['name'],
-                        "Type": "Survey",
-                        "Details": f"{vessel['line_km']} km at {vessel['speed']} knots",
-                        "Progress": 100
-                    })
-                timeline_data.append({
-                    "Task": pause['name'],
-                    "Start": pause_start,
-                    "Finish": pause_end,
-                    "Resource": vessel['name'],
-                    "Type": pause['type'],
-                    "Details": pause.get('notes', ''),
-                    "Progress": 0
-                })
-                current_start = pause_end
-            if current_start < survey_end:
-                timeline_data.append({
-                    "Task": f"Survey: {vessel['name']}",
-                    "Start": current_start,
-                    "Finish": survey_end,
-                    "Resource": vessel['name'],
-                    "Type": "Survey",
-                    "Details": f"{vessel['line_km']} km at {vessel['speed']} knots",
-                    "Progress": 100
-                })
     for task in [t for t in tasks if not t['vessel_id']]:
         timeline_data.append({
             "Task": task['name'],
@@ -277,7 +338,7 @@ def build_timeline_data(vessels: List[Dict], tasks: List[Dict]) -> pd.DataFrame:
 
 # --- UI Components ---
 def show_project_header():
-    st.title("🌊 Hydrographic Survey Estimator Pro")
+    st.markdown('<div class="stHeader"><h1><i class="fas fa-water"></i> Hydrographic Survey Estimator Pro</h1></div>', unsafe_allow_html=True)
     calculate_surveyed_km()
     progress = calculate_project_progress()
     total_cost = calculate_project_cost()
@@ -285,14 +346,18 @@ def show_project_header():
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
+        st.markdown('<div class="stMetric">', unsafe_allow_html=True)
         st.metric("Project Progress", f"{progress:.1f}%")
+        st.markdown(f'<div class="progress-bar" style="width: {progress}%;"></div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
     with col2:
+        st.markdown('<div class="stMetric">', unsafe_allow_html=True)
         st.metric("Surveyed Line Km", f"{st.session_state.surveyed_km:.1f} km")
+        st.markdown('</div>', unsafe_allow_html=True)
     with col3:
         st.metric("Estimated Duration", f"{total_days:.1f} days")
     with col4:
         st.metric("Estimated Cost", f"${total_cost:,.2f}")
-    st.progress(progress / 100)
 
 def vessel_form(edit_vessel: Optional[Dict] = None):
     is_edit = edit_vessel is not None
@@ -305,20 +370,20 @@ def vessel_form(edit_vessel: Optional[Dict] = None):
                 line_km = st.number_input("Line Km*", min_value=0.1, step=1.0, value=float(edit_vessel['line_km']) if is_edit else 100.0)
                 st.markdown('<span class="tooltip-icon" title="Total kilometers to be surveyed by this vessel">ℹ️</span>', unsafe_allow_html=True)
             with col2:
-                speed = st.number_input("Speed (knots)*", min_value=0.1, step=0.1, value=float(edit_vessel['speed']) if is_edit else DEFAULT_SURVEY_SPEED)
+                speed = st.number_input("Speed (knots)*", min_value=0.1, step=0.1, value=float(edit_vessel['speed'] if is_edit else DEFAULT_SURVEY_SPEED))
                 st.markdown('<span class="tooltip-icon" title="Average survey speed in knots">ℹ️</span>', unsafe_allow_html=True)
-                start_date = st.date_input("Start Date*", value=pd.to_datetime(edit_vessel['start_date']).date() if is_edit else datetime.date.today())
+                start_date = st.date_input("Start Date*", value=pd.to_datetime(edit_vessel['start_date']).date() if is_edit else datetime.datetime.now().date())
                 st.markdown('<span class="tooltip-icon" title="Planned start date for survey operations">ℹ️</span>', unsafe_allow_html=True)
             st.markdown("**Contingency Days**")
             col3, col4, col5 = st.columns(3)
             with col3:
-                transit_days = st.number_input("Transit Days", min_value=0.0, step=0.5, value=float(edit_vessel['transit_days']) if is_edit else 2.0)
+                transit_days = st.number_input("Transit Days", min_value=0.0, step=0.5, value=float(edit_vessel['transit_days'] if is_edit else 2.0))
                 st.markdown('<span class="tooltip-icon" title="Days required for vessel transit to/from survey area">ℹ️</span>', unsafe_allow_html=True)
             with col4:
-                weather_days = st.number_input("Weather Days", min_value=0.0, step=0.5, value=float(edit_vessel['weather_days']) if is_edit else 3.0)
+                weather_days = st.number_input("Weather Days", min_value=0.0, step=0.5, value=float(edit_vessel['weather_days'] if is_edit else 3.0))
                 st.markdown('<span class="tooltip-icon" title="Estimated weather downtime based on historical data">ℹ️</span>', unsafe_allow_html=True)
             with col5:
-                maintenance_days = st.number_input("Maintenance Days", min_value=0.0, step=0.5, value=float(edit_vessel['maintenance_days']) if is_edit else 1.0)
+                maintenance_days = st.number_input("Maintenance Days", min_value=0.0, step=0.5, value=float(edit_vessel['maintenance_days'] if is_edit else 1.0))
                 st.markdown('<span class="tooltip-icon" title="Scheduled maintenance and equipment checks">ℹ️</span>', unsafe_allow_html=True)
             
             submit_button = st.form_submit_button("Update Vessel" if is_edit else "Add Vessel")
@@ -362,9 +427,9 @@ def task_form(edit_task: Optional[Dict] = None):
                 )
                 st.markdown('<span class="tooltip-icon" title="Category of task for reporting and visualization">ℹ️</span>', unsafe_allow_html=True)
             with col2:
-                start_date = st.date_input("Start Date*", value=pd.to_datetime(edit_task['start_date']).date() if is_edit else datetime.date.today())
+                start_date = st.date_input("Start Date*", value=pd.to_datetime(edit_task['start_date']).date() if is_edit else datetime.datetime.now().date())
                 st.markdown('<span class="tooltip-icon" title="Planned start date for the task">ℹ️</span>', unsafe_allow_html=True)
-                end_date = st.date_input("End Date*", value=pd.to_datetime(edit_task['end_date']).date() if is_edit else datetime.date.today() + datetime.timedelta(days=1))
+                end_date = st.date_input("End Date*", value=pd.to_datetime(edit_task['end_date']).date() if is_edit else datetime.datetime.now().date() + datetime.timedelta(days=1))
                 st.markdown('<span class="tooltip-icon" title="Planned completion date for the task">ℹ️</span>', unsafe_allow_html=True)
             col3, col4 = st.columns(2)
             with col3:
@@ -416,19 +481,19 @@ def show_vessels():
             col1, col2, col3 = st.columns([3, 1, 1])
             with col1:
                 st.markdown(f"""
-                <div class="vessel-card">
-                    <h4>{vessel['name']}</h4>
+                <div class="card">
+                    <h4><i class="fas fa-ship"></i> {vessel['name']}</h4>
                     <p><strong>Survey:</strong> {vessel['line_km']} km | {vessel['speed']} knots | {vessel['survey_days']} days</p>
-                    <p><strong>Schedule:</strong> {vessel['start_date']} to {vessel['end_date']} ({vessel['total_days']} days total)</p>
+                    <p><strong>Schedule:</strong> {vessel['start_date']} to {vessel['end_date']} ({vessel['total_days']} days)</p>
                     <p><strong>Contingencies:</strong> Transit: {vessel['transit_days']}d | Weather: {vessel['weather_days']}d | Maint: {vessel['maintenance_days']}d</p>
                 </div>
                 """, unsafe_allow_html=True)
             with col2:
-                if st.button("Edit", key=f"edit_vessel_{vessel['id']}"):
+                if st.button("✏️ Edit", key=f"edit_vessel_{vessel['id']}"):
                     vessel_form(vessel)
             with col3:
                 with st.form(f"delete_vessel_{vessel['id']}"):
-                    st.form_submit_button("Delete", on_click=lambda: delete_vessel(vessel['id']))
+                    st.form_submit_button("🗑️ Delete", on_click=lambda: delete_vessel(vessel['id']))
 
 def delete_vessel(vessel_id: str):
     st.session_state.vessels = [v for v in st.session_state.vessels if v['id'] != vessel_id]
@@ -456,7 +521,7 @@ def show_tasks():
         vessel_id = next((v['id'] for v in st.session_state.vessels if v['name'] == filter_vessel), None)
         filtered_tasks = [t for t in filtered_tasks if t['vessel_id'] == vessel_id]
     if filter_date != "All":
-        today = datetime.date.today()
+        today = datetime.datetime.now().date()
         if filter_date == "Upcoming":
             filtered_tasks = [t for t in filtered_tasks if pd.to_datetime(t['start_date']).date() > today]
         elif filter_date == "Past":
@@ -469,19 +534,19 @@ def show_tasks():
         col1, col2, col3 = st.columns([3, 1, 1])
         with col1:
             st.markdown(f"""
-            <div style="background: rgba(255,255,255,0.1); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <strong>{task['name']}</strong> ({task['type']})<br>
+            <div class="card">
+                <strong><i class="fas fa-tasks"></i> {task['name']}</strong> ({task['type']})<br>
                 <small>{task['start_date']} to {task['end_date']} | Vessel: {vessel_name}</small><br>
                 {f"<small>Cost: ${task['cost']:,.2f}</small>" if task['cost'] > 0 else ""}
-                {"<small style='color: orange;'>⚠️ Pauses Survey</small>" if task['pause_survey'] else ""}
+                {("<small style='color: orange;'>⚠️ Pauses Survey</small>" if task['pause_survey'] else "")}
             </div>
             """, unsafe_allow_html=True)
         with col2:
-            if st.button("Edit", key=f"edit_task_{task['id']}"):
+            if st.button("✏️ Edit", key=f"edit_task_{task['id']}"):
                 task_form(task)
         with col3:
             with st.form(f"delete_task_{task['id']}"):
-                st.form_submit_button("Delete", on_click=lambda: delete_task(task['id']))
+                st.form_submit_button("🗑️ Delete", on_click=lambda: delete_task(task['id']))
 
 def delete_task(task_id: str):
     st.session_state.tasks = [t for t in st.session_state.tasks if t['id'] != task_id]
@@ -491,37 +556,34 @@ def show_timeline():
     if not st.session_state.vessels and not st.session_state.tasks:
         st.info("Add vessels and tasks to generate the project timeline")
         return
-    st.subheader("📊 Project Timeline")
-    df = build_timeline_data(st.session_state.vessels, st.session_state.tasks)
-    if df.empty:
-        st.warning("No timeline data available")
-        return
-    fig = px.timeline(
-        df,
-        x_start="Start",
-        x_end="Finish",
-        y="Resource",
-        color="Type",
-        color_discrete_map=COLOR_MAP,
-        hover_name="Task",
-        hover_data={"Details": True, "Progress": ":.0f%"},
-        title="Survey Project Timeline"
-    )
-    fig.update_yaxes(autorange="reversed", title_text="")
-    fig.update_xaxes(title_text="Timeline")
-    fig.update_layout(
-        height=max(400, len(st.session_state.vessels) * 100 + len(st.session_state.tasks) * 50),
-        plot_bgcolor="rgba(255,255,255,0.1)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        font_color="white",
-        legend_title_text="Activity Type",
-        hoverlabel=dict(
-            bgcolor="rgba(30, 64, 175, 0.8)",
-            font_size=12,
-            font_family="Arial"
+    with st.expander("📊 Project Timeline", expanded=True):
+        st.subheader("📊 Project Timeline")
+        df = build_timeline_data(st.session_state.vessels, st.session_state.tasks)
+        if df.empty:
+            st.warning("No timeline data available")
+            return
+        fig = px.timeline(
+            df,
+            x_start="Start",
+            x_end="Finish",
+            y="Resource",
+            color="Type",
+            color_discrete_map=COLOR_MAP,
+            hover_name="Task",
+            hover_data={"Details": True, "Progress": ":.0f%"},
+            title="Survey Project Timeline"
         )
-    )
-    st.plotly_chart(fig, use_container_width=True)
+        fig.update_yaxes(autorange="reversed", title_text="")
+        fig.update_xaxes(title_text="Timeline")
+        fig.update_layout(
+            height=max(400, len(st.session_state.vessels) * 100 + len(st.session_state.tasks) * 50),
+            plot_bgcolor="rgba(255,255,255,0.1)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font_color="white",
+            legend_title_text="Activity Type",
+            hoverlabel=dict(bgcolor="rgba(30, 64, 175, 0.8)", font_size=12, font_family="Arial")
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
 def project_settings():
     with st.expander("⚙️ Project Settings", expanded=False):
