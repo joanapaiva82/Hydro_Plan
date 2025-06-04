@@ -1,5 +1,5 @@
 # Hydrographic Survey Estimator Tool
-# Version: 1.6 (Full dark theme, white text, Gantt fix, project switching)
+# Version: 1.7 (All visibility fixes, label fixes, export/import always visible)
 # Developed by: Joana Paiva
 # Contact: joana.paiva82@outlook.com
 
@@ -26,10 +26,10 @@ st.markdown("""
             font-weight: 700;
         }
         label,
-        .stTextInput label,
-        .stNumberInput label,
-        .stSelectbox label,
-        .stDateInput label,
+        .stTextInput > label,
+        .stNumberInput > label,
+        .stSelectbox > label,
+        .stDateInput > label,
         .stForm label,
         div[data-testid="stForm"] label {
             color: #ffffff !important;
@@ -61,6 +61,12 @@ st.markdown("""
         }
         .stMarkdown p, .stMarkdown ul, .stMarkdown li, .stMarkdown strong {
             color: #ffffff !important;
+        }
+        div[data-testid="stAlert"] {
+            color: #ffffff !important;
+            background-color: #1e3a8a !important;
+            border-radius: 8px;
+            font-weight: 500;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -134,8 +140,8 @@ with st.form("vessel_form"):
             })
             st.success(f"Vessel '{vessel_name}' added.")
 
+st.subheader("📋 Added Vessels")
 if st.session_state.vessels:
-    st.subheader("📋 Added Vessels")
     for v in st.session_state.vessels:
         st.markdown(f"""
         **🛥 {v['name']}**
@@ -145,6 +151,8 @@ if st.session_state.vessels:
         - Survey: {v['survey_days']} d, Transit: {v['transit_days']} d, Weather: {v['weather_days']} d, Maintenance: {v['maintenance_days']} d
         - **Total:** {v['total_days']} days
         """)
+else:
+    st.markdown("_No vessels added yet._")
 
 # --- TASK FORM ---
 st.subheader("📝 Add Task")
@@ -182,6 +190,53 @@ if st.session_state.tasks:
             f"<p><b>{t['name']}</b> ({t['type']}) | {t['start_date']} to {t['end_date']} | Vessel: {t.get('vessel', 'N/A')} | Pause: {t['pause_survey']}</p>",
             unsafe_allow_html=True
         )
+else:
+    st.markdown("_No tasks added yet._")
+
+# --- SAVE / LOAD SECTION ---
+st.subheader("💾 Save or Load Project")
+col1, col2 = st.columns(2)
+
+if col1.button("📤 Export Project (JSON)"):
+    export_data = {
+        "project_name": project_name,
+        "unsurveyed_km": unsurveyed_km,
+        "vessels": st.session_state.vessels,
+        "tasks": st.session_state.tasks,
+    }
+    st.download_button(
+        label="Download JSON",
+        data=json.dumps(export_data, indent=2),
+        file_name=f"{project_name or 'project'}.json",
+        mime="application/json"
+    )
+
+if col2.button("📤 Export Project (CSV Excel)"):
+    vessel_df = pd.DataFrame(st.session_state.vessels)
+    task_df = pd.DataFrame(st.session_state.tasks)
+    with pd.ExcelWriter("project_data.xlsx", engine="xlsxwriter") as writer:
+        vessel_df.to_excel(writer, sheet_name="Vessels", index=False)
+        task_df.to_excel(writer, sheet_name="Tasks", index=False)
+    with open("project_data.xlsx", "rb") as f:
+        st.download_button("Download Excel", f, file_name="project_data.xlsx", mime="application/vnd.ms-excel")
+
+uploaded_file = st.file_uploader("📥 Load Project (JSON or Excel)", type=["json", "xlsx"])
+if uploaded_file:
+    try:
+        if uploaded_file.name.endswith(".json"):
+            data = json.load(uploaded_file)
+            st.session_state.vessels = data.get("vessels", [])
+            st.session_state.tasks = data.get("tasks", [])
+            st.success("✅ Project loaded from JSON successfully!")
+
+        elif uploaded_file.name.endswith(".xlsx"):
+            xls = pd.ExcelFile(uploaded_file)
+            st.session_state.vessels = xls.parse("Vessels").to_dict(orient="records")
+            st.session_state.tasks = xls.parse("Tasks").to_dict(orient="records")
+            st.success("✅ Project loaded from Excel successfully!")
+
+    except Exception as e:
+        st.error(f"❌ Error loading project: {e}")
 
 # --- GANTT CHART FUNCTION ---
 def build_timeline():
