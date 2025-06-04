@@ -188,14 +188,15 @@ if col2.button("📤 Export Project (CSV Excel)"):
     with open("project_data.xlsx", "rb") as f:
         st.download_button("Download Excel", f, file_name="project_data.xlsx", mime="application/vnd.ms-excel")
 
+import json
+
 uploaded_file = st.file_uploader("📥 Load Project (JSON or Excel)", type=["json", "xlsx"])
 if uploaded_file:
     try:
         if uploaded_file.name.endswith(".json"):
-            raw = uploaded_file.read()
-            data = pd.read_json(raw, typ="series")
-            st.session_state.vessels = data["vessels"]
-            st.session_state.tasks = data["tasks"]
+            data = json.load(uploaded_file)
+            st.session_state.vessels = data.get("vessels", [])
+            st.session_state.tasks = data.get("tasks", [])
             st.success("✅ Project loaded from JSON successfully!")
 
         elif uploaded_file.name.endswith(".xlsx"):
@@ -205,7 +206,7 @@ if uploaded_file:
             st.success("✅ Project loaded from Excel successfully!")
 
     except Exception as e:
-        st.error(f"Error loading project: {e}")
+        st.error(f"❌ Error loading project: {e}")
 
 # --- Gantt Chart ---
 st.subheader("📊 Project Timeline")
