@@ -1,15 +1,15 @@
 # Hydrographic Survey Estimator Tool
-# Version: 1.2 (Dark Theme + Export/Import)
+# Version: 1.3
 # Developed by: Joana Paiva
 # Contact: joana.paiva82@outlook.com
-# Description:
-# This Streamlit app helps hydrographic survey teams plan, visualize, and manage vessel timelines and tasks.
-# Supports intelligent Gantt charting and allows saving/loading project files (JSON or Excel).
 
 import streamlit as st
 import datetime
 import pandas as pd
 import plotly.express as px
+
+# --- Set page config FIRST ---
+st.set_page_config(page_title="Hydrographic Survey Estimator", layout="wide")
 
 # --- Custom Dark Theme ---
 st.markdown("""
@@ -53,8 +53,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- Page Config ---
-st.set_page_config(page_title="Hydrographic Survey Estimator", layout="wide")
+# --- App Title ---
 st.title("🌊 Hydrographic Survey Estimator")
 
 # --- Session State ---
@@ -189,7 +188,7 @@ if col2.button("📤 Export Project (CSV Excel)"):
     with open("project_data.xlsx", "rb") as f:
         st.download_button("Download Excel", f, file_name="project_data.xlsx", mime="application/vnd.ms-excel")
 
-uploaded_file = st.file_uploader("📥 Load Project (JSON or Excel)", type=["json", "xlsx", "csv"])
+uploaded_file = st.file_uploader("📥 Load Project (JSON or Excel)", type=["json", "xlsx"])
 if uploaded_file:
     try:
         if uploaded_file.name.endswith(".json"):
@@ -205,9 +204,6 @@ if uploaded_file:
             st.session_state.tasks = xls.parse("Tasks").to_dict(orient="records")
             st.success("✅ Project loaded from Excel successfully!")
 
-        elif uploaded_file.name.endswith(".csv"):
-            st.warning("⚠️ CSV support is limited to Excel with sheets. Use JSON or XLSX for full support.")
-
     except Exception as e:
         st.error(f"Error loading project: {e}")
 
@@ -216,7 +212,6 @@ st.subheader("📊 Project Timeline")
 
 timeline_data = []
 
-# 1. Tasks
 for task in st.session_state.tasks:
     timeline_data.append({
         "Type": f"Task: {task['name']}",
@@ -226,7 +221,6 @@ for task in st.session_state.tasks:
         "Color": "Task"
     })
 
-# 2. Surveys (pause-aware)
 for vessel in st.session_state.vessels:
     survey_start = pd.to_datetime(vessel["start_date"])
     survey_end = pd.to_datetime(vessel["end_date"])
@@ -264,7 +258,6 @@ for vessel in st.session_state.vessels:
                 "Color": "Survey"
             })
 
-# 3. Plot
 if timeline_data:
     df = pd.DataFrame(timeline_data)
     fig = px.timeline(df, x_start="Start", x_end="End", y="Group", color="Color", text="Type")
