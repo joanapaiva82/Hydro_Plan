@@ -264,13 +264,13 @@ if timeline_data:
     fig = px.timeline(df, x_start="Start", x_end="End", y="Group", color="Color", text="Type")
     fig.update_yaxes(autorange="reversed")
     fig.update_layout(
-        height=600,
-        title="Survey & Task Timeline",
-        plot_bgcolor="#0b1d3a",
-        paper_bgcolor="#0b1d3a",
-        font_color="#ffffff",
-        legend_title_text="",
-        title_font_size=20
+    height=600,
+    title="Survey & Task Timeline",
+    plot_bgcolor="#ffffff",       # chart plot area white
+    paper_bgcolor="#ffffff",      # entire chart white
+    font_color="#000000",         # black labels
+    legend_title_text="",
+    title_font_size=20
     )
     st.plotly_chart(fig, use_container_width=True)
 else:
