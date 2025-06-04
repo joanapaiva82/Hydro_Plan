@@ -1,5 +1,5 @@
 # Hydrographic Survey Estimator Tool
-# Version: 1.9 (Fixes JSON import sync, live Gantt updates, and form label visibility)
+# Version: 1.10 (Final: field labels visible, alert contrast, Gantt updates, JSON sync)
 # Developed by: Joana Paiva
 # Contact: joana.paiva82@outlook.com
 
@@ -9,9 +9,10 @@ import pandas as pd
 import plotly.express as px
 import json
 
+# --- PAGE CONFIG ---
 st.set_page_config(page_title="Hydrographic Survey Estimator", layout="wide")
 
-# --- CUSTOM CSS ---
+# --- UNIVERSAL DARK THEME + LABEL FIXES ---
 st.markdown("""
     <style>
         html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
@@ -30,13 +31,13 @@ st.markdown("""
         .stSelectbox > label,
         .stDateInput > label,
         .stForm label,
-        div[data-testid="stForm"] label {
+        div[data-testid="stForm"] label,
+        div[data-baseweb="form-control"] label {
             color: #ffffff !important;
-            font-weight: 600;
+            font-weight: 600 !important;
             font-size: 0.9rem !important;
             display: block !important;
             margin-bottom: 6px !important;
-            margin-top: 4px;
         }
         .stTextInput input, .stNumberInput input, .stDateInput input {
             background-color: #ffffff !important;
@@ -74,7 +75,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- STATE INIT ---
+# --- SESSION STATE INIT ---
 if "vessels" not in st.session_state:
     st.session_state.vessels = []
 if "tasks" not in st.session_state:
@@ -82,6 +83,7 @@ if "tasks" not in st.session_state:
 if "projects" not in st.session_state:
     st.session_state.projects = []
 
+# --- TITLE ---
 st.title("🌊 Hydrographic Survey Estimator")
 
 # --- PROJECT INFO ---
@@ -184,7 +186,7 @@ if st.session_state.tasks:
 else:
     st.markdown("_No tasks added yet._")
 
-# --- SAVE/LOAD ---
+# --- SAVE / LOAD ---
 st.subheader("💾 Save or Load Project")
 col1, col2 = st.columns(2)
 
@@ -224,7 +226,7 @@ if uploaded_file:
     except Exception as e:
         st.error(f"❌ Error loading project: {e}")
 
-# --- GANTT FUNCTION ---
+# --- BUILD GANTT CHART ---
 def build_timeline(vessels, tasks):
     timeline_data = []
     for task in tasks:
@@ -241,20 +243,38 @@ def build_timeline(vessels, tasks):
         pauses = [t for t in tasks if t.get("vessel") == vessel["name"] and t.get("pause_survey") == "Yes"]
         pauses = sorted(pauses, key=lambda t: pd.to_datetime(t["start_date"]))
         if not pauses:
-            timeline_data.append({"Type": f"Survey: {vessel['name']}", "Start": survey_start, "End": survey_end, "Group": vessel["name"], "Color": "Survey"})
+            timeline_data.append({
+                "Type": f"Survey: {vessel['name']}",
+                "Start": survey_start,
+                "End": survey_end,
+                "Group": vessel["name"],
+                "Color": "Survey"
+            })
         else:
             current_start = survey_start
             for pause in pauses:
                 pause_start = pd.to_datetime(pause["start_date"])
                 pause_end = pd.to_datetime(pause["end_date"])
                 if pause_start > current_start:
-                    timeline_data.append({"Type": f"Survey (part): {vessel['name']}", "Start": current_start, "End": pause_start, "Group": vessel["name"], "Color": "Survey"})
+                    timeline_data.append({
+                        "Type": f"Survey (part): {vessel['name']}",
+                        "Start": current_start,
+                        "End": pause_start,
+                        "Group": vessel["name"],
+                        "Color": "Survey"
+                    })
                 current_start = pause_end
             if current_start < survey_end:
-                timeline_data.append({"Type": f"Survey (resumed): {vessel['name']}", "Start": current_start, "End": survey_end + datetime.timedelta(days=len(pauses)), "Group": vessel["name"], "Color": "Survey"})
+                timeline_data.append({
+                    "Type": f"Survey (resumed): {vessel['name']}",
+                    "Start": current_start,
+                    "End": survey_end + datetime.timedelta(days=len(pauses)),
+                    "Group": vessel["name"],
+                    "Color": "Survey"
+                })
     return pd.DataFrame(timeline_data)
 
-# --- SHOW GANTT ---
+# --- DISPLAY GANTT ---
 df = build_timeline(st.session_state.vessels, st.session_state.tasks)
 if not df.empty:
     fig = px.timeline(df, x_start="Start", x_end="End", y="Group", color="Color", text="Type")
