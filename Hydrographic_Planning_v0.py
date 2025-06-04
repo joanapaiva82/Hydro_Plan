@@ -30,105 +30,162 @@ st.set_page_config(
 st.markdown("""
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        :root {
-            --primary: #1E40AF;
-            --secondary: #0B1D3A;
-            --accent: #1D4ED8;
-            --gradient: linear-gradient(135deg, #1E40AF, #3B82F6);
-        }
+        /* 1. Overall Dark-Nav Background & White Text */
         html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
-            background: var(--secondary);
-            color: white;
+            background: #0B1D3A;      /* very dark navy */
+            color: #FFFFFF;           /* always white text */
             font-family: 'Arial', sans-serif;
         }
+
+        /* 2. Header Styling */
         .stHeader {
-            background: var(--gradient);
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            animation: fadeIn 1s ease-in;
+            width: 100%;
+            background: linear-gradient(135deg, #1E40AF, #3B82F6);
+            padding: 25px 40px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            border-radius: 8px;
         }
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+        .stHeader h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            color: #FFFFFF;
+            text-align: center;
+        }
+
+        /* 3. Metrics Container Flexbox */
+        .metrics-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 30px;
         }
         .stMetric {
-            background: rgba(255,255,255,0.05);
-            padding: 15px;
+            background: rgba(255,255,255,0.08);
+            flex: 1;
+            min-width: 180px;
+            padding: 15px 20px;
             border-radius: 8px;
-            transition: transform 0.3s;
+            text-align: center;
+            transition: transform 0.2s;
         }
         .stMetric:hover {
-            transform: scale(1.02);
+            transform: scale(1.03);
         }
-        .stForm, .stExpander {
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-            padding: 20px;
-            border-left: 4px solid var(--accent);
-            margin-bottom: 20px;
+        /* Slightly off-white for metric labels vs. values */
+        .stMetric .css-1hynsf2 {
+            color: #E0E0E0 !important;
         }
-        .stButton > button {
-            background: var(--gradient);
-            color: white;
+
+        /* 4. Expander Styling */
+        .stExpander > button {
+            background: rgba(255,255,255,0.1) !important;
             border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            transition: all 0.3s;
+            color: #FFFFFF !important;
+            font-weight: bold;
+            padding: 14px 20px !important;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        .stExpander > div {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .stExpander .css-ocqkz7 {
+            color: #FFFFFF !important;
+            font-weight: 500;
+        }
+
+        /* 5. Input Fields: White Labels, Light-Gray Backgrounds */
+        .stTextInput > label, .stNumberInput > label {
+            color: #FFFFFF !important;
+            font-size: 0.95rem;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        .stTextInput input[type="text"], .stNumberInput input[type="number"] {
+            background: #F5F5F5 !important;  /* light gray */
+            color: #000000 !important;
+            border: none !important;
+            border-radius: 6px !important;
+            padding: 10px !important;
+            width: 100% !important;
+        }
+
+        /* 6. Button Styling */
+        .stButton > button {
+            background: linear-gradient(135deg, #1E40AF, #3B82F6) !important;
+            color: #FFFFFF !important;
+            border: none;
+            font-weight: 600;
+            padding: 12px 24px !important;
+            border-radius: 6px !important;
+            transition: transform 0.2s;
         }
         .stButton > button:hover {
-            background: linear-gradient(135deg, #3B82F6, #1E40AF);
             transform: translateY(-2px);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
-        .stAlert {
-            background: rgba(30, 58, 138, 0.5);
-            border-left: 4px solid var(--accent);
-            border-radius: 5px;
-        }
-        .card {
-            background: rgba(30, 64, 175, 0.2);
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-left: 4px solid var(--accent);
-            transition: all 0.3s;
-        }
-        .card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        .tooltip-icon {
-            color: var(--accent);
-            cursor: help;
-            margin-left: 5px;
-        }
-        .progress-bar {
-            height: 20px;
-            background: #3B82F6;
-            border-radius: 10px;
-            animation: progress 2s ease-out;
-        }
-        @keyframes progress {
-            from { width: 0; }
-            to { width: 100%; }
-        }
+
+        /* 7. Sidebar Styling */
         .sidebar {
-            background: rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.03);
             padding: 20px;
-            border-radius: 10px;
-            height: 100vh;
+            border-radius: 8px;
+            width: 220px;
             position: fixed;
-            width: 200px;
+            top: 0;
+            bottom: 0;
+            overflow-y: auto;
+        }
+        .sidebar .css-1emrehy {
+            width: 100%;
+            margin-bottom: 10px !important;
+            background: linear-gradient(135deg, #1E40AF, #3B82F6) !important;
+            border-radius: 6px !important;
+            color: #FFFFFF !important;
+            font-weight: 500 !important;
+        }
+
+        /* 8. Vessel/Task Card Styling */
+        .card {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+            border-left: 4px solid #1D4ED8;
+        }
+        .card h4 {
+            margin: 0 0 6px 0;
+            color: #FFFFFF;
+        }
+        .card p, .card small {
+            color: #E0E0E0;
+        }
+
+        /* 9. Plotly Timeline Legend & Text Contrast */
+        .js-plotly-plot .legendtext {
+            fill: #FFFFFF !important;
+        }
+        .js-plotly-plot .traces text {
+            fill: #FFFFFF !important;
+        }
+
+        /* 10. Tooltip Icon */
+        .tooltip-icon {
+            color: #FFFFFF !important;
+            font-size: 1.1rem;
+            margin-left: 6px;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# --- Sidebar ---
+# --- Sidebar Buttons & Callbacks ---
 def load_sample_data():
     st.session_state.vessels = [
-        Vessel("Orca Explorer",   100.0, 5.0, datetime.date(2025, 6, 4), 2.0, 3.0, 1.0).to_dict(),
-        Vessel("Sea Hawk",        150.0, 4.5, datetime.date(2025, 6, 5), 1.5, 2.5, 0.5).to_dict()
+        Vessel("Orca Explorer", 100.0, 5.0, datetime.date(2025, 6, 4), 2.0, 3.0, 1.0).to_dict(),
+        Vessel("Sea Hawk",      150.0, 4.5, datetime.date(2025, 6, 5), 1.5, 2.5, 0.5).to_dict()
     ]
     st.session_state.tasks = [
         Task("Sediment Sampling", "Survey",      datetime.date(2025, 6, 4), datetime.date(2025, 6, 5),
@@ -139,16 +196,14 @@ def load_sample_data():
     st.session_state.project_name = "Sample Survey"
     st.session_state.unsurveyed_km = 250.0
     calculate_surveyed_km()
-    # No need to rerun immediately; letting Streamlit re-render is sufficient.
+    # Let Streamlit re-render automatically
 
 def reset_session():
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     init_session_state()
-    # Streamlit will re-render automatically once state is cleared.
+    # Streamlit will re-render automatically
 
-
-# Build the sidebar (buttons must capture their callbacks properly)
 st.sidebar.markdown('<div class="sidebar"><h3>Navigation</h3>', unsafe_allow_html=True)
 st.sidebar.button("Home")
 st.sidebar.button("Settings")
@@ -174,7 +229,6 @@ class Vessel:
         self.daily_progress = self.line_km / self.total_days if self.total_days > 0 else 0
 
     def calculate_survey_days(self) -> float:
-        # Survey days = total km / (knots * 24)
         return round(self.line_km / (self.speed * 24), 2)
 
     def calculate_total_days(self) -> float:
@@ -231,7 +285,6 @@ def init_session_state():
         "project_name": "",
         "unsurveyed_km": 0.0,
         "surveyed_km": 0.0,
-        # Weather factor and day_rate must always be float initially
         "weather_factor": float(DEFAULT_WEATHER_DOWNTIME),
         "day_rate": float(25000.0)
     }
@@ -334,6 +387,7 @@ def build_timeline_data(vessels: List[Dict], tasks: List[Dict]) -> pd.DataFrame:
                 "Details": f"{vessel['line_km']} km at {vessel['speed']} knots",
                 "Progress": 100
             })
+
     # Any unassigned tasks
     for task in [t for t in tasks if not t['vessel_id']]:
         timeline_data.append({
@@ -345,15 +399,22 @@ def build_timeline_data(vessels: List[Dict], tasks: List[Dict]) -> pd.DataFrame:
             "Details": task.get('notes', ''),
             "Progress": 0
         })
+
     return pd.DataFrame(timeline_data)
 
 # --- UI Components ---
 def show_project_header():
-    st.markdown('<div class="stHeader"><h1><i class="fas fa-water"></i> Hydrographic Survey Estimator Pro</h1></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="stHeader"><h1><i class="fas fa-water"></i> Hydrographic Survey Estimator Pro</h1></div>',
+        unsafe_allow_html=True
+    )
     calculate_surveyed_km()
     progress = calculate_project_progress()
     total_cost = calculate_project_cost()
     total_days = sum(v['total_days'] for v in st.session_state.vessels)
+
+    # Wrap metrics in a flex container
+    st.markdown('<div class="metrics-container">', unsafe_allow_html=True)
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -366,9 +427,15 @@ def show_project_header():
         st.metric("Surveyed Line Km", f"{st.session_state.surveyed_km:.1f} km")
         st.markdown('</div>', unsafe_allow_html=True)
     with col3:
+        st.markdown('<div class="stMetric">', unsafe_allow_html=True)
         st.metric("Estimated Duration", f"{total_days:.1f} days")
+        st.markdown('</div>', unsafe_allow_html=True)
     with col4:
+        st.markdown('<div class="stMetric">', unsafe_allow_html=True)
         st.metric("Estimated Cost", f"${total_cost:,.2f}")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def vessel_form(edit_vessel: Optional[Dict] = None):
     is_edit = edit_vessel is not None
@@ -379,39 +446,39 @@ def vessel_form(edit_vessel: Optional[Dict] = None):
             col1, col2 = st.columns([3, 2])
             with col1:
                 vessel_name = st.text_input(
-                    "Vessel Name*", 
-                    value=edit_vessel['name'] if is_edit else "", 
+                    "Vessel Name*",
+                    value=edit_vessel['name'] if is_edit else "",
                     placeholder="e.g. Orca Explorer"
                 )
                 st.markdown(
-                    '<span class="tooltip-icon" title="Unique name for the survey vessel">ℹ️</span>', 
+                    '<span class="tooltip-icon" title="Unique name for the survey vessel">ℹ️</span>',
                     unsafe_allow_html=True
                 )
                 line_km = st.number_input(
-                    "Line Km*", 
-                    min_value=0.1, step=1.0, 
+                    "Line Km*",
+                    min_value=0.1, step=1.0,
                     value=float(edit_vessel['line_km']) if is_edit else 100.0
                 )
                 st.markdown(
-                    '<span class="tooltip-icon" title="Total kilometers to be surveyed by this vessel">ℹ️</span>', 
+                    '<span class="tooltip-icon" title="Total kilometers to be surveyed by this vessel">ℹ️</span>',
                     unsafe_allow_html=True
                 )
             with col2:
                 speed = st.number_input(
-                    "Speed (knots)*", 
+                    "Speed (knots)*",
                     min_value=0.1, step=0.1,
                     value=float(edit_vessel['speed']) if is_edit else DEFAULT_SURVEY_SPEED
                 )
                 st.markdown(
-                    '<span class="tooltip-icon" title="Average survey speed in knots">ℹ️</span>', 
+                    '<span class="tooltip-icon" title="Average survey speed in knots">ℹ️</span>',
                     unsafe_allow_html=True
                 )
                 start_date = st.date_input(
-                    "Start Date*", 
+                    "Start Date*",
                     value=pd.to_datetime(edit_vessel['start_date']).date() if is_edit else datetime.date.today()
                 )
                 st.markdown(
-                    '<span class="tooltip-icon" title="Planned start date for survey operations">ℹ️</span>', 
+                    '<span class="tooltip-icon" title="Planned start date for survey operations">ℹ️</span>',
                     unsafe_allow_html=True
                 )
 
@@ -419,42 +486,53 @@ def vessel_form(edit_vessel: Optional[Dict] = None):
             col3, col4, col5 = st.columns(3)
             with col3:
                 transit_days = st.number_input(
-                    "Transit Days", 
-                    min_value=0.0, step=0.5, 
+                    "Transit Days",
+                    min_value=0.0, step=0.5,
                     value=float(edit_vessel['transit_days']) if is_edit else 2.0
                 )
                 st.markdown(
-                    '<span class="tooltip-icon" title="Days required for vessel transit to/from survey area">ℹ️</span>', 
+                    '<span class="tooltip-icon" title="Days required for vessel transit to/from survey area">ℹ️</span>',
                     unsafe_allow_html=True
                 )
             with col4:
                 weather_days = st.number_input(
-                    "Weather Days", 
-                    min_value=0.0, step=0.5, 
+                    "Weather Days",
+                    min_value=0.0, step=0.5,
                     value=float(edit_vessel['weather_days']) if is_edit else 3.0
                 )
                 st.markdown(
-                    '<span class="tooltip-icon" title="Estimated weather downtime based on historical data">ℹ️</span>', 
+                    '<span class="tooltip-icon" title="Estimated weather downtime based on historical data">ℹ️</span>',
                     unsafe_allow_html=True
                 )
             with col5:
                 maintenance_days = st.number_input(
-                    "Maintenance Days", 
-                    min_value=0.0, step=0.5, 
+                    "Maintenance Days",
+                    min_value=0.0, step=0.5,
                     value=float(edit_vessel['maintenance_days']) if is_edit else 1.0
                 )
                 st.markdown(
-                    '<span class="tooltip-icon" title="Scheduled maintenance and equipment checks">ℹ️</span>', 
+                    '<span class="tooltip-icon" title="Scheduled maintenance and equipment checks">ℹ️</span>',
                     unsafe_allow_html=True
                 )
 
             submit_btn_label = "Update Vessel" if is_edit else "Add Vessel"
             submit_button = st.form_submit_button(submit_btn_label)
             if submit_button:
-                errors = validate_vessel(vessel_name, line_km, speed, transit_days, weather_days, maintenance_days)
+                errors = validate_vessel(
+                    vessel_name,
+                    line_km,
+                    speed,
+                    transit_days,
+                    weather_days,
+                    maintenance_days
+                )
                 if is_edit:
-                    # If editing, ignore “already exists” for this same vessel
-                    errors = [e for e in errors if e != f"Vessel '{vessel_name}' already exists" or vessel_name != edit_vessel['name']]
+                    # Ignore “already exists” error for the same vessel name
+                    errors = [
+                        e for e in errors
+                        if e != f"Vessel '{vessel_name}' already exists"
+                        or vessel_name != edit_vessel['name']
+                    ]
                 if errors:
                     for err in errors:
                         st.error(err)
@@ -470,11 +548,14 @@ def vessel_form(edit_vessel: Optional[Dict] = None):
                         id=edit_vessel['id'] if is_edit else None
                     )
                     if is_edit:
-                        st.session_state.vessels = [v for v in st.session_state.vessels if v['id'] != edit_vessel['id']]
+                        st.session_state.vessels = [
+                            v for v in st.session_state.vessels
+                            if v['id'] != edit_vessel['id']
+                        ]
                     st.session_state.vessels.append(vessel_obj.to_dict())
                     st.success(f"Vessel '{vessel_name}' {'updated' if is_edit else 'added'} successfully!")
                     calculate_surveyed_km()
-                    st.experimental_rerun()  # only rerun after state change
+                    st.experimental_rerun()
 
 def task_form(edit_task: Optional[Dict] = None):
     is_edit = edit_task is not None
@@ -485,12 +566,12 @@ def task_form(edit_task: Optional[Dict] = None):
             col1, col2 = st.columns(2)
             with col1:
                 task_name = st.text_input(
-                    "Task Name*", 
-                    value=edit_task['name'] if is_edit else "", 
+                    "Task Name*",
+                    value=edit_task['name'] if is_edit else "",
                     placeholder="e.g. Sediment Sampling"
                 )
                 st.markdown(
-                    '<span class="tooltip-icon" title="Descriptive name for the task">ℹ️</span>', 
+                    '<span class="tooltip-icon" title="Descriptive name for the task">ℹ️</span>',
                     unsafe_allow_html=True
                 )
                 task_type = st.selectbox(
@@ -499,24 +580,24 @@ def task_form(edit_task: Optional[Dict] = None):
                     index=(["Survey", "Maintenance", "Weather", "Transit", "Delay", "Other"].index(edit_task['type']) if is_edit else 0)
                 )
                 st.markdown(
-                    '<span class="tooltip-icon" title="Category of task for reporting and visualization">ℹ️</span>', 
+                    '<span class="tooltip-icon" title="Category of task for reporting and visualization">ℹ️</span>',
                     unsafe_allow_html=True
                 )
             with col2:
                 start_date = st.date_input(
-                    "Start Date*", 
+                    "Start Date*",
                     value=(pd.to_datetime(edit_task['start_date']).date() if is_edit else datetime.date.today())
                 )
                 st.markdown(
-                    '<span class="tooltip-icon" title="Planned start date for the task">ℹ️</span>', 
+                    '<span class="tooltip-icon" title="Planned start date for the task">ℹ️</span>',
                     unsafe_allow_html=True
                 )
                 end_date = st.date_input(
-                    "End Date*", 
+                    "End Date*",
                     value=(pd.to_datetime(edit_task['end_date']).date() if is_edit else datetime.date.today() + datetime.timedelta(days=1))
                 )
                 st.markdown(
-                    '<span class="tooltip-icon" title="Planned completion date for the task">ℹ️</span>', 
+                    '<span class="tooltip-icon" title="Planned completion date for the task">ℹ️</span>',
                     unsafe_allow_html=True
                 )
 
@@ -546,7 +627,7 @@ def task_form(edit_task: Optional[Dict] = None):
                     value=(edit_task['pause_survey'] if is_edit else False)
                 )
                 st.markdown(
-                    '<span class="tooltip-icon" title="Does this task pause the vessel\'s survey operations?">ℹ️</span>', 
+                    '<span class="tooltip-icon" title="Does this task pause the vessel\'s survey operations?">ℹ️</span>',
                     unsafe_allow_html=True
                 )
                 cost = st.number_input(
@@ -556,7 +637,7 @@ def task_form(edit_task: Optional[Dict] = None):
                     step=1000.0
                 )
                 st.markdown(
-                    '<span class="tooltip-icon" title="Additional cost associated with this task">ℹ️</span>', 
+                    '<span class="tooltip-icon" title="Additional cost associated with this task">ℹ️</span>',
                     unsafe_allow_html=True
                 )
 
@@ -579,10 +660,13 @@ def task_form(edit_task: Optional[Dict] = None):
                         st.error(err)
                 else:
                     if is_edit:
-                        st.session_state.tasks = [t for t in st.session_state.tasks if t['id'] != edit_task['id']]
+                        st.session_state.tasks = [
+                            t for t in st.session_state.tasks
+                            if t['id'] != edit_task['id']
+                        ]
                     st.session_state.tasks.append(task_dict)
                     st.success(f"Task '{task_name}' {'updated' if is_edit else 'added'} successfully!")
-                    st.experimental_rerun()  # only rerun after state change
+                    st.experimental_rerun()
 
 def show_vessels():
     if not st.session_state.vessels:
@@ -605,13 +689,18 @@ def show_vessels():
                 if st.button("✏️ Edit", key=f"edit_vessel_{vessel['id']}"):
                     vessel_form(vessel)
             with col3:
-                # Capture vessel_id properly in lambda
                 if st.button("🗑️ Delete", key=f"delete_vessel_{vessel['id']}"):
                     delete_vessel(vessel["id"])
 
 def delete_vessel(vessel_id: str):
-    st.session_state.vessels = [v for v in st.session_state.vessels if v['id'] != vessel_id]
-    st.session_state.tasks = [t for t in st.session_state.tasks if t['vessel_id'] != vessel_id]
+    st.session_state.vessels = [
+        v for v in st.session_state.vessels
+        if v['id'] != vessel_id
+    ]
+    st.session_state.tasks = [
+        t for t in st.session_state.tasks
+        if t['vessel_id'] != vessel_id
+    ]
     calculate_surveyed_km()
     st.experimental_rerun()
 
@@ -664,7 +753,10 @@ def show_tasks():
                 delete_task(task["id"])
 
 def delete_task(task_id: str):
-    st.session_state.tasks = [t for t in st.session_state.tasks if t['id'] != task_id]
+    st.session_state.tasks = [
+        t for t in st.session_state.tasks
+        if t['id'] != task_id
+    ]
     st.experimental_rerun()
 
 def show_timeline():
@@ -702,7 +794,6 @@ def show_timeline():
 
 def project_settings():
     with st.expander("⚙️ Project Settings", expanded=False):
-        # Bind the number_inputs directly to session_state keys to keep types consistent
         col1, col2 = st.columns(2)
         with col1:
             st.text_input(
@@ -840,7 +931,7 @@ def data_management():
 
 # --- Main App Layout ---
 def main():
-    init_session_state()  # ensure every key exists before any widget
+    init_session_state()
     show_project_header()
     project_settings()
     data_management()
