@@ -5,6 +5,7 @@ import plotly.express as px
 import json
 from uuid import uuid4
 from typing import List, Dict, Optional
+import io
 
 # Constants
 DEFAULT_SURVEY_SPEED = 5.0  # knots
@@ -113,13 +114,13 @@ class Vessel:
             "name": self.name,
             "line_km": self.line_km,
             "speed": self.speed,
-            "start_date": str(self.start_date),
+            "start_date": self.start_date.isoformat(),
             "survey_days": self.survey_days,
             "transit_days": self.transit_days,
             "weather_days": self.weather_days,
             "maintenance_days": self.maintenance_days,
             "total_days": self.total_days,
-            "end_date": str(self.end_date),
+            "end_date": self.end_date.isoformat(),
             "daily_progress": self.daily_progress
         }
 
@@ -140,8 +141,8 @@ class Task:
             "id": self.id,
             "name": self.name,
             "type": self.type,
-            "start_date": str(self.start_date),
-            "end_date": str(self.end_date),
+            "start_date": self.start_date.isoformat(),
+            "end_date": self.end_date.isoformat(),
             "vessel_id": self.vessel_id,
             "pause_survey": self.pause_survey,
             "cost": self.cost
@@ -260,7 +261,7 @@ def build_timeline_data() -> pd.DataFrame:
                     "Finish": pause_end,
                     "Resource": vessel['name'],
                     "Type": pause['type'],
-                    "Details": pause.get('notes', ''),
+                    "Details": f"Cost: ${pause['cost']:,.2f}" if pause['cost'] > 0 else "",
                     "Progress": 0
                 })
                 
@@ -286,7 +287,7 @@ def build_timeline_data() -> pd.DataFrame:
             "Finish": pd.to_datetime(task['end_date']),
             "Resource": "Unassigned",
             "Type": task['type'],
-            "Details": task.get('notes', ''),
+            "Details": f"Cost: ${task['cost']:,.2f}" if task['cost'] > 0 else "",
             "Progress": 0
         })
     
@@ -404,8 +405,8 @@ def task_form():
                 task = {
                     "name": task_name,
                     "type": task_type,
-                    "start_date": str(start_date),
-                    "end_date": str(end_date),
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
                     "vessel_id": vessel_id,
                     "pause_survey": pause_survey,
                     "cost": cost
@@ -455,7 +456,7 @@ def show_tasks():
     # Filter options
     col1, col2, col3 = st.columns(3)
     with col1:
-        filter_type = st.selectbox("Filter by Type", ["All"] + sorted(list(set(t['type'] for t in st.session_state.tasks)))
+        filter_type = st.selectbox("Filter by Type", ["All"] + sorted(list(set(t['type'] for t in st.session_state.tasks))))
     with col2:
         filter_vessel = st.selectbox("Filter by Vessel", ["All"] + [v['name'] for v in st.session_state.vessels])
     with col3:
@@ -598,17 +599,17 @@ def data_management():
                 vessel_df = pd.DataFrame(st.session_state.vessels)
                 task_df = pd.DataFrame(st.session_state.tasks)
                 
-                with pd.ExcelWriter("survey_data.xlsx") as writer:
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     vessel_df.to_excel(writer, sheet_name="Vessels", index=False)
                     task_df.to_excel(writer, sheet_name="Tasks", index=False)
                 
-                with open("survey_data.xlsx", "rb") as f:
-                    st.download_button(
-                        label="Download Excel",
-                        data=f,
-                        file_name=f"{export_name}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+                st.download_button(
+                    label="Download Excel",
+                    data=output.getvalue(),
+                    file_name=f"{export_name}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
         
         with col2:
             st.markdown("**Import Project**")
