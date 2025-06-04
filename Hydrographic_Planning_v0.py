@@ -1,5 +1,5 @@
 # Hydrographic Survey Estimator Tool
-# Version: 1.3
+# Version: 1.4
 # Developed by: Joana Paiva
 # Contact: joana.paiva82@outlook.com
 
@@ -7,46 +7,52 @@ import streamlit as st
 import datetime
 import pandas as pd
 import plotly.express as px
+import json
 
 # --- Set page config FIRST ---
 st.set_page_config(page_title="Hydrographic Survey Estimator", layout="wide")
 
-# --- Custom Dark Theme ---
+# --- Custom Full Dark Blue Theme with White Cards and Gantt ---
 st.markdown("""
     <style>
-        body {
-            background-color: #0b1d3a;
+        html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
+            background-color: #0b1d3a !important;
         }
-        .main {
-            background-color: #0b1d3a;
+
+        section.main {
+            background-color: #0b1d3a !important;
         }
-        section[data-testid="stSidebar"] {
-            background-color: #102042;
-        }
-        h1, h2, h3, h4, h5, h6, .st-emotion-cache-10trblm {
+
+        h1, h2, h3, h4, h5, h6 {
             color: #ffffff;
         }
-        .stTextInput > label, .stNumberInput > label, .stSelectbox > label, .stDateInput > label {
+
+        label, .stTextInput > label, .stNumberInput > label, .stSelectbox > label, .stDateInput > label {
             color: #cdd6f4 !important;
         }
+
         .stTextInput input, .stNumberInput input, .stDateInput input {
             background-color: #ffffff !important;
             color: #000000 !important;
         }
+
         .stSelectbox div[data-baseweb="select"] {
             background-color: #ffffff !important;
             color: #000000 !important;
         }
+
         .stForm {
             background-color: #ffffff;
             border-radius: 10px;
             padding: 20px;
             margin-bottom: 20px;
         }
+
         .stButton > button {
             background-color: #1e40af;
             color: white;
         }
+
         .stButton > button:hover {
             background-color: #1d4ed8;
         }
@@ -126,7 +132,7 @@ if st.session_state.vessels:
 st.subheader("📝 Add Task")
 with st.form("task_form"):
     col1, col2 = st.columns(2)
-    task_name = col1.text_input("Task Name", placeholder="e.g. Mobilisation")
+    task_name = col1.text_input("Task Name", placeholder="e.g. Sediment Sample")
     task_type = col2.selectbox("Task Type", options=["General", "Survey", "Maintenance", "Weather", "Transit"])
 
     col3, col4 = st.columns(2)
@@ -174,7 +180,7 @@ if col1.button("📤 Export Project (JSON)"):
     }
     st.download_button(
         label="Download JSON",
-        data=str.encode(pd.Series(export_data).to_json()),
+        data=json.dumps(export_data, indent=2),
         file_name=f"{project_name or 'project'}.json",
         mime="application/json"
     )
@@ -187,8 +193,6 @@ if col2.button("📤 Export Project (CSV Excel)"):
         task_df.to_excel(writer, sheet_name="Tasks", index=False)
     with open("project_data.xlsx", "rb") as f:
         st.download_button("Download Excel", f, file_name="project_data.xlsx", mime="application/vnd.ms-excel")
-
-import json
 
 uploaded_file = st.file_uploader("📥 Load Project (JSON or Excel)", type=["json", "xlsx"])
 if uploaded_file:
@@ -264,13 +268,13 @@ if timeline_data:
     fig = px.timeline(df, x_start="Start", x_end="End", y="Group", color="Color", text="Type")
     fig.update_yaxes(autorange="reversed")
     fig.update_layout(
-    height=600,
-    title="Survey & Task Timeline",
-    plot_bgcolor="#ffffff",       # chart plot area white
-    paper_bgcolor="#ffffff",      # entire chart white
-    font_color="#000000",         # black labels
-    legend_title_text="",
-    title_font_size=20
+        height=600,
+        title="Survey & Task Timeline",
+        plot_bgcolor="#ffffff",       # White chart background
+        paper_bgcolor="#ffffff",      # White border background
+        font_color="#000000",         # Black text
+        legend_title_text="",
+        title_font_size=20
     )
     st.plotly_chart(fig, use_container_width=True)
 else:
