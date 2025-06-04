@@ -1,5 +1,5 @@
 # Hydrographic Survey Estimator Tool
-# Version: 1.11 (Legend fixes: labels above fields, final layout polish)
+# Version: 1.10 (Final: field labels visible, alert contrast, Gantt updates, JSON sync)
 # Developed by: Joana Paiva
 # Contact: joana.paiva82@outlook.com
 
@@ -9,9 +9,10 @@ import pandas as pd
 import plotly.express as px
 import json
 
+# --- PAGE CONFIG ---
 st.set_page_config(page_title="Hydrographic Survey Estimator", layout="wide")
 
-# --- CUSTOM CSS ---
+# --- UNIVERSAL DARK THEME + LABEL FIXES ---
 st.markdown("""
     <style>
         html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
@@ -24,10 +25,19 @@ st.markdown("""
             color: #ffffff !important;
             font-weight: 700;
         }
+        label,
+        .stTextInput > label,
+        .stNumberInput > label,
+        .stSelectbox > label,
+        .stDateInput > label,
         .stForm label,
         div[data-testid="stForm"] label,
         div[data-baseweb="form-control"] label {
-            display: none !important;
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            font-size: 0.9rem !important;
+            display: block !important;
+            margin-bottom: 6px !important;
         }
         .stTextInput input, .stNumberInput input, .stDateInput input {
             background-color: #ffffff !important;
@@ -70,61 +80,48 @@ if "vessels" not in st.session_state:
     st.session_state.vessels = []
 if "tasks" not in st.session_state:
     st.session_state.tasks = []
+if "projects" not in st.session_state:
+    st.session_state.projects = []
 
-# --- HEADER ---
+# --- TITLE ---
 st.title("🌊 Hydrographic Survey Estimator")
 
 # --- PROJECT INFO ---
 st.subheader("📁 Project Information")
 col1, col2, col3 = st.columns([3, 2, 2])
-with col1:
-    st.markdown("**Project Name**", unsafe_allow_html=True)
-    project_name = st.text_input("", placeholder="e.g. Australia West Survey")
+project_name = col1.text_input("Project Name", placeholder="e.g. Australia West Survey")
+unsurveyed_km = col2.number_input("Unsurveyed Line Km", min_value=0.0, step=0.1)
+surveyed_km = col3.number_input("Surveyed Line Km", value=0.0, step=0.1, disabled=True)
 
-with col2:
-    st.markdown("**Unsurveyed Line Km**", unsafe_allow_html=True)
-    unsurveyed_km = st.number_input("", min_value=0.0, step=0.1)
+colA, colB = st.columns(2)
+if colA.button("🔄 Start New Project"):
+    st.session_state.vessels.clear()
+    st.session_state.tasks.clear()
+    st.success("New project started. All fields cleared.")
 
-with col3:
-    st.markdown("**Surveyed Line Km**", unsafe_allow_html=True)
-    surveyed_km = st.number_input("", value=0.0, step=0.1, disabled=True)
+if colB.button("➕ Add to Project List"):
+    st.session_state.projects.append({
+        "name": project_name,
+        "unsurveyed_km": unsurveyed_km,
+        "vessels": st.session_state.vessels.copy(),
+        "tasks": st.session_state.tasks.copy()
+    })
+    st.success(f"Project '{project_name}' added to project list.")
 
-# --- ADD VESSEL FORM ---
+# --- VESSEL FORM ---
 st.subheader("🚢 Add Vessel")
 with st.form("vessel_form"):
     col1, col2 = st.columns([3, 2])
-    with col1:
-        st.markdown("**Vessel Name**", unsafe_allow_html=True)
-        vessel_name = st.text_input("", placeholder="e.g. Orca Explorer")
-
-    with col2:
-        st.markdown("**Line Km**", unsafe_allow_html=True)
-        line_km = st.number_input("", min_value=0.0, step=1.0)
-
+    vessel_name = col1.text_input("Vessel Name", placeholder="e.g. Orca Explorer")
+    line_km = col2.number_input("Line Km", min_value=0.0, step=1.0)
     col3, col4 = st.columns(2)
-    with col3:
-        st.markdown("**Speed (knots)**", unsafe_allow_html=True)
-        speed = st.number_input("", min_value=0.1, step=0.1)
-
-    with col4:
-        st.markdown("**Survey Start Date**", unsafe_allow_html=True)
-        start_date = st.date_input("", value=datetime.date.today())
-
+    speed = col3.number_input("Speed (knots)", min_value=0.1, step=0.1)
+    start_date = col4.date_input("Survey Start Date", value=datetime.date.today())
     col5, col6, col7 = st.columns(3)
-    with col5:
-        st.markdown("**Transit Days**", unsafe_allow_html=True)
-        transit_days = st.number_input("", min_value=0.0, step=0.5)
-
-    with col6:
-        st.markdown("**Weather Days**", unsafe_allow_html=True)
-        weather_days = st.number_input("", min_value=0.0, step=0.5)
-
-    with col7:
-        st.markdown("**Maintenance Days**", unsafe_allow_html=True)
-        maintenance_days = st.number_input("", min_value=0.0, step=0.5)
-
-    submitted = st.form_submit_button("Add Vessel")
-    if submitted:
+    transit_days = col5.number_input("Transit Days", min_value=0.0, step=0.5)
+    weather_days = col6.number_input("Weather Days", min_value=0.0, step=0.5)
+    maintenance_days = col7.number_input("Maintenance Days", min_value=0.0, step=0.5)
+    if st.form_submit_button("Add Vessel"):
         survey_days = line_km / (speed * 24)
         total_days = survey_days + transit_days + weather_days + maintenance_days
         end_date = start_date + datetime.timedelta(days=total_days)
@@ -142,7 +139,6 @@ with st.form("vessel_form"):
         })
         st.success(f"Vessel '{vessel_name}' added.")
 
-# --- DISPLAY VESSELS ---
 st.subheader("📋 Added Vessels")
 if st.session_state.vessels:
     for v in st.session_state.vessels:
@@ -157,36 +153,18 @@ if st.session_state.vessels:
 else:
     st.markdown("_No vessels added yet._")
 
-# --- ADD TASK FORM ---
+# --- TASK FORM ---
 st.subheader("📝 Add Task")
 with st.form("task_form"):
     col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("**Task Name**", unsafe_allow_html=True)
-        task_name = st.text_input("", placeholder="e.g. Sediment Sample")
-
-    with col2:
-        st.markdown("**Task Type**", unsafe_allow_html=True)
-        task_type = st.selectbox("", ["General", "Survey", "Maintenance", "Weather", "Transit"])
-
+    task_name = col1.text_input("Task Name", placeholder="e.g. Sediment Sample")
+    task_type = col2.selectbox("Task Type", ["General", "Survey", "Maintenance", "Weather", "Transit"])
     col3, col4 = st.columns(2)
-    with col3:
-        st.markdown("**Task Start Date**", unsafe_allow_html=True)
-        task_start = st.date_input("", value=datetime.date.today())
-
-    with col4:
-        st.markdown("**Task End Date**", unsafe_allow_html=True)
-        task_end = st.date_input("", value=datetime.date.today() + datetime.timedelta(days=1))
-
+    task_start = col3.date_input("Task Start Date", value=datetime.date.today())
+    task_end = col4.date_input("Task End Date", value=datetime.date.today() + datetime.timedelta(days=1))
     col5, col6 = st.columns(2)
-    with col5:
-        st.markdown("**Assigned Vessel (optional)**", unsafe_allow_html=True)
-        assigned_vessel = st.selectbox("", [""] + [v["name"] for v in st.session_state.vessels])
-
-    with col6:
-        st.markdown("**Pause Survey?**", unsafe_allow_html=True)
-        pause_survey = st.selectbox("", ["No", "Yes"])
-
+    assigned_vessel = col5.selectbox("Assigned Vessel (optional)", [""] + [v["name"] for v in st.session_state.vessels])
+    pause_survey = col6.selectbox("Pause Survey?", ["No", "Yes"])
     if st.form_submit_button("Add Task"):
         st.session_state.tasks.append({
             "name": task_name,
@@ -198,7 +176,6 @@ with st.form("task_form"):
         })
         st.success(f"Task '{task_name}' added.")
 
-# --- DISPLAY TASKS ---
 st.subheader("📌 Current Tasks")
 if st.session_state.tasks:
     for t in st.session_state.tasks:
@@ -209,7 +186,7 @@ if st.session_state.tasks:
 else:
     st.markdown("_No tasks added yet._")
 
-# --- IMPORT / EXPORT ---
+# --- SAVE / LOAD ---
 st.subheader("💾 Save or Load Project")
 col1, col2 = st.columns(2)
 
@@ -249,7 +226,7 @@ if uploaded_file:
     except Exception as e:
         st.error(f"❌ Error loading project: {e}")
 
-# --- BUILD GANTT ---
+# --- BUILD GANTT CHART ---
 def build_timeline(vessels, tasks):
     timeline_data = []
     for task in tasks:
@@ -299,18 +276,19 @@ def build_timeline(vessels, tasks):
 
 # --- DISPLAY GANTT ---
 df = build_timeline(st.session_state.vessels, st.session_state.tasks)
-st.subheader("📊 Project Timeline")
 if not df.empty:
     fig = px.timeline(df, x_start="Start", x_end="End", y="Group", color="Color", text="Type")
     fig.update_yaxes(autorange="reversed")
     fig.update_layout(
         height=600,
+        title="Survey & Task Timeline",
         plot_bgcolor="#ffffff",
         paper_bgcolor="#ffffff",
         font_color="#000000",
         legend_title_text="",
         title_font_size=20
     )
+    st.subheader("📊 Project Timeline")
     st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("No timeline data to display.")
