@@ -40,7 +40,7 @@ COLOR_MAP = {
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
-# INJECT CUSTOM CSS (all fixes: immediate input focus, button/text color, etc.)
+# INJECT CUSTOM CSS (button/text color, white “No…” messages, etc.)
 # ────────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Hydrographic Survey Estimator",
@@ -178,12 +178,19 @@ st.markdown(
             color: #FFFFFF !important;
             font-weight: 500 !important;
         }
-        /* 9) Gantt chart: legend & text dark‐navy */
+        /* 9) Gantt chart: legend & axis text styling */
         .js-plotly-plot .legendtext {
             fill: #0B1D3A !important;
         }
-        .js-plotly-plot .traces text {
+        .js-plotly-plot .xtick text {
             fill: #0B1D3A !important;
+        }
+        .js-plotly-plot .ytick text {
+            fill: #0B1D3A !important;
+        }
+        .js-plotly-plot .plotly .text {
+            fill: #FFFFFF !important;
+            font-size: 12px !important;
         }
     </style>
     """,
@@ -504,7 +511,7 @@ for v in current_project.vessels:
                 <div class="card">
                     <h4><i class="fas fa-ship"></i> {v.name}</h4>
                     <p><strong>Survey:</strong> {v.vessel_km} km</p>
-                    <p><strong>Schedule:</strong> {v.start_date} &rarr; {v.end_date} ({v.total_days} days)</p>
+                    <p><strong>Schedule:</strong> {v.start_date} → {v.end_date} ({v.total_days} days)</p>
                     <p><strong>Breakdown:</strong> Survey: {v.survey_days} d |
                       Transit: {v.transit_days} d |
                       Weather: {v.weather_days} d |
@@ -715,7 +722,7 @@ for t in current_project.tasks:
                 f"""
                 <div class="card">
                   <strong><i class="fas fa-tasks"></i> {t.name}</strong> ({t.task_type})<br>
-                  <small>{t.start_date} &rarr; {t.end_date} | Vessel: {assigned_name}</small><br>
+                  <small>{t.start_date} → {t.end_date} | Vessel: {assigned_name}</small><br>
                   {("<small style='color:orange;'>⚠️ Pauses Survey</small>" if t.pause_survey else "")}
                 </div>
                 """,
@@ -1097,7 +1104,7 @@ else:
         gridcolor="rgba(200,200,200,0.2)"
     )
 
-    # Draw “Today” line via add_shape + add_annotation (no add_vline!)
+    # Draw “Today” line via add_shape + add_annotation (no add_vline anywhere)
     today_str = datetime.date.today().isoformat()  # e.g. "2025-06-05"
     fig.add_shape(
         type="line",
