@@ -227,7 +227,6 @@ class Vessel:
             + self.maintenance_days,
             2
         )
-        # fractional days in timedelta are converted to seconds internally
         self.end_date = self.start_date + datetime.timedelta(days=self.total_days)
 
     def _convert_to_days(self, val: float, unit: str) -> float:
@@ -275,22 +274,22 @@ class Task:
         pause_survey: bool = False,
         id: Optional[str] = None
     ):
-        self.id         = id or str(uuid4())
-        self.name       = name
-        self.task_type  = task_type
-        self.start_date = start_date
-        self.end_date   = end_date
-        self.vessel_id  = vessel_id
+        self.id          = id or str(uuid4())
+        self.name        = name
+        self.task_type   = task_type
+        self.start_date  = start_date
+        self.end_date    = end_date
+        self.vessel_id   = vessel_id
         self.pause_survey = pause_survey
 
     def to_dict(self) -> Dict:
         return {
-            "id":          self.id,
-            "name":        self.name,
-            "task_type":   self.task_type,
-            "start_date":  str(self.start_date),
-            "end_date":    str(self.end_date),
-            "vessel_id":   self.vessel_id,
+            "id":           self.id,
+            "name":         self.name,
+            "task_type":    self.task_type,
+            "start_date":   str(self.start_date),
+            "end_date":     str(self.end_date),
+            "vessel_id":    self.vessel_id,
             "pause_survey": self.pause_survey,
         }
 
@@ -316,10 +315,10 @@ class Project:
         infill_pct: float,
         id: Optional[str] = None
     ):
-        self.id           = id or str(uuid4())
-        self.name         = name
+        self.id            = id or str(uuid4())
+        self.name          = name
         self.total_line_km = total_line_km
-        self.infill_pct   = infill_pct
+        self.infill_pct    = infill_pct
         self.vessels: List[Vessel] = []
         self.tasks: List[Task]       = []
 
@@ -989,12 +988,12 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                         for idx, row in task_df.iterrows():
                             pid = str(row["project_id"])
                             t = Task.from_dict({
-                                "id":          str(row["id"]),
-                                "name":        row["name"],
-                                "task_type":   row["task_type"],
-                                "start_date":  row["start_date"],
-                                "end_date":    row["end_date"],
-                                "vessel_id":   row["vessel_id"],
+                                "id":           str(row["id"]),
+                                "name":         row["name"],
+                                "task_type":    row["task_type"],
+                                "start_date":   row["start_date"],
+                                "end_date":     row["end_date"],
+                                "vessel_id":    row["vessel_id"],
                                 "pause_survey": bool(row["pause_survey"])
                             })
                             for p in new_projects:
@@ -1108,17 +1107,16 @@ for m in milestones:
     m["ts"] = pd.to_datetime(m["date"])
 
 # ────────────────────────────────────────────────────────────────────────────────
-# 9.b) BUILD THE PLOTLY GANTT BY HAND (go.Figure)
+# 9.b) BUILD THE PLOTLY GANTT BY HAND (go.Figure) – Date‐Axis Fix
 # ────────────────────────────────────────────────────────────────────────────────
-# 1) Prepare Figure
 fig = go.Figure()
 
-# 2) Identify unique resources and assign them Y‐positions
+# 1) Identify unique resources and assign them Y‐positions
 resources = list(timeline_df["Resource"].cat.categories)
 n_rows    = len(resources)
 row_positions = { r: i for i, r in enumerate(resources) }
 
-# 3) Draw alternating background “lanes”
+# 2) Draw alternating background “lanes”
 for r, idx in row_positions.items():
     lane_color = "#F2F2F2" if (idx % 2) else "#FFFFFF"
     fig.add_shape(
@@ -1134,7 +1132,7 @@ for r, idx in row_positions.items():
         layer="below"
     )
 
-# 4) Draw month bars at the top
+# 3) Draw month bars at the top
 overall_start = timeline_df["Start"].min().floor("D")
 overall_end   = timeline_df["Finish"].max().ceil("D")
 all_months    = pd.date_range(overall_start, overall_end, freq="MS")
@@ -1160,11 +1158,11 @@ for i, month_start in enumerate(all_months):
         yref="paper",
         text=month_abbr[month_start.month],
         showarrow=False,
-        font=dict(color="#0B1D3A", size=12, family="Arial"),
+        font=dict(color="#0B1D3A", size=14, family="Arial"),
         align="center"
     )
 
-# 5) Draw milestone triangles and labels
+# 4) Draw milestone triangles and labels
 for m in milestones:
     fig.add_shape(
         type="path",
@@ -1184,11 +1182,11 @@ for m in milestones:
         yref="y",
         text=m["label"],
         showarrow=False,
-        font=dict(color="#0B1D3A", size=11, family="Arial"),
+        font=dict(color="#0B1D3A", size=12, family="Arial"),
         align="center"
     )
 
-# 6) Draw “Today” line if in range
+# 5) Draw “Today” line if in range
 today_ts = pd.to_datetime(datetime.date.today())
 if overall_start <= today_ts <= overall_end:
     fig.add_shape(
@@ -1209,21 +1207,20 @@ if overall_start <= today_ts <= overall_end:
         yref="y",
         text="Today",
         showarrow=False,
-        font=dict(color="#DB504A", size=10, family="Arial"),
+        font=dict(color="#DB504A", size=12, family="Arial"),
         textangle=-90,
         align="center"
     )
 
-# 7) Plot each bar segment (one go.Bar per row)
+# 6) Plot each bar segment using explicit start/end dates
 for _, row in timeline_df.iterrows():
-    y_idx         = row_positions[row["Resource"]]
-    duration_days = (row["Finish"] - row["Start"]).total_seconds() / 86400.0
-    bar_color     = COLOR_MAP.get(row["Type"], COLOR_MAP["Other"])
+    y_idx      = row_positions[row["Resource"]]
+    bar_color  = COLOR_MAP.get(row["Type"], COLOR_MAP["Other"])
     fig.add_trace(
         go.Bar(
-            x=[duration_days],
-            y=[n_rows - 1 - y_idx],  # invert so idx=0 is top row
-            base=[row["Start"]],
+            x=[row["Finish"]],            # End date
+            base=[row["Start"]],          # Start date
+            y=[n_rows - 1 - y_idx],       # invert so idx=0 is top row
             orientation="h",
             marker_color=bar_color,
             marker_line_width=0,
@@ -1232,14 +1229,13 @@ for _, row in timeline_df.iterrows():
                 "<b>%{customdata[0]}</b><br>"
                 "Type: %{customdata[1]}<br>"
                 "Start: %{base|%Y-%m-%d}<br>"
-                "Finish: %{base + x|%Y-%m-%d}<br>"
-                "<extra></extra>"
+                "Finish: %{x|%Y-%m-%d}<extra></extra>"
             ),
             customdata=[[row["Task"], row["Type"]]]
         )
     )
 
-# 8) Axis formatting
+# 7) Axis formatting (date axis, y-labels visible)
 fig.update_yaxes(
     tickmode="array",
     tickvals=[n_rows - 1 - i for i in range(n_rows)],
@@ -1247,32 +1243,32 @@ fig.update_yaxes(
     autorange=False,
     range=[-0.5, n_rows - 0.5],
     title_text="",
-    tickfont=dict(color="#0B1D3A", size=12, family="Arial"),
+    tickfont=dict(color="#0B1D3A", size=14, family="Arial"),
     gridcolor="rgba(0,0,0,0)"
 )
 fig.update_xaxes(
-    tickformat="%b %d %Y",
-    tickfont=dict(color="#0B1D3A", size=11, family="Arial"),
+    tickformat="%b %d, %Y",
+    tickfont=dict(color="#0B1D3A", size=14, family="Arial"),
     title_text="Date",
-    title_font=dict(color="#0B1D3A", size=14, family="Arial"),
+    title_font=dict(color="#0B1D3A", size=16, family="Arial"),
     showgrid=True,
     gridcolor="rgba(200,200,200,0.2)"
 )
 
-# 9) Final layout tweaks
+# 8) Final layout tweaks
 fig.update_layout(
     height=max(400, 80 * n_rows),
-    margin=dict(l=10, r=10, t=50, b=50),
-    plot_bgcolor="#FFFFFF",           # white “track” area
+    margin=dict(l=10, r=10, t=60, b=50),
+    plot_bgcolor="#FFFFFF",          # white “track” area where bars live
     paper_bgcolor="rgba(0,0,0,0)",     # transparent behind
     title=dict(
         text=f"Gantt Chart ► {proj.name}",
-        font_size=20,
+        font_size=22,
         font_color="#0B1D3A",
         x=0.01
     ),
     showlegend=False
 )
 
-# 10) Render in Streamlit
+# 9) Render in Streamlit
 st.plotly_chart(fig, use_container_width=True)
