@@ -1,46 +1,47 @@
 import streamlit as st
 import datetime
 import pandas as pd
-import plotly.express as px
+import plotly.graph_objects as go
 import json
 from uuid import uuid4
 from io import BytesIO
 from typing import List, Dict, Optional
+from calendar import month_abbr
 
 # ────────────────────────────────────────────────────────────────────────────────
-# SESSION STATE INITIALIZATION
+# 0) SESSION STATE INITIALIZATION
 # ────────────────────────────────────────────────────────────────────────────────
 def init_session_state():
     if "projects" not in st.session_state:
-        st.session_state["projects"] = []  # List of Project objects
+        st.session_state["projects"] = []             # List[Project]
     if "current_project_id" not in st.session_state:
         st.session_state["current_project_id"] = None
     if "editing_vessel" not in st.session_state:
-        st.session_state["editing_vessel"] = None  # vessel_id being edited
+        st.session_state["editing_vessel"] = None     # vessel_id we’re editing
     if "editing_task" not in st.session_state:
-        st.session_state["editing_task"] = None    # task_id being edited
+        st.session_state["editing_task"] = None       # task_id we’re editing
 
 init_session_state()
 
 # ────────────────────────────────────────────────────────────────────────────────
-# CONSTANTS & COLOR_MAP for Gantt
+# 1) CONSTANTS & COLOR_MAP
 # ────────────────────────────────────────────────────────────────────────────────
 DEFAULT_SURVEY_SPEED = 5.0  # knots
 
 COLOR_MAP = {
-    "Survey": "#2E86AB",
-    "Maintenance": "#A23B72",
-    "Weather": "#3B1F2B",
-    "Transit": "#3D5A6C",
-    "Delay": "#DB504A",
+    "Survey":          "#2E86AB",
+    "Maintenance":     "#A23B72",
+    "Weather":         "#3B1F2B",
+    "Transit":         "#3D5A6C",
+    "Delay":           "#DB504A",
     "Sediment Sample": "#F18F01",
-    "Deployment": "#6A894A",
-    "Recovery": "#7D3C98",
-    "Other": "#6B7280",
+    "Deployment":      "#6A894A",
+    "Recovery":        "#7D3C98",
+    "Other":           "#6B7280",
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
-# INJECT CUSTOM CSS (all fixes: immediate input focus, button/text color, etc.)
+# 2) CUSTOM CSS & THEME
 # ────────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Hydrographic Survey Estimator",
@@ -50,24 +51,24 @@ st.set_page_config(
 
 st.markdown(
     """
-    <link rel="stylesheet"
+    <link rel="stylesheet" 
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        /* 0) Force st.info() text to white */
-        .stInfo * {
-            color: #FFFFFF !important;
-        }
-        /* 1) Checkbox labels forced white */
-        .stCheckbox, .stCheckbox * {
-            color: #FFFFFF !important;
-        }
-        /* 2) Overall Dark background & white text */
+        /* ──────────────── GLOBAL & TEXT COLORS ───────────────── */
         html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
             background: #0B1D3A;
             color: #FFFFFF;
             font-family: 'Arial', sans-serif;
         }
-        /* 3) Header: white background + navy text */
+        /* Force st.info() text to white */
+        .stInfo * {
+            color: #FFFFFF !important;
+        }
+        /* Checkbox & its label forced white */
+        .stCheckbox, .stCheckbox * {
+            color: #FFFFFF !important;
+        }
+        /* ──────────────── HEADER ───────────────── */
         .stHeader {
             width: 100%;
             background: #FFFFFF;
@@ -83,7 +84,7 @@ st.markdown(
             text-align: center;
             font-weight: 600;
         }
-        /* 4) Section headers */
+        /* ──────────────── SECTION HEADERS ───────────────── */
         .section-header {
             font-size: 1.3rem;
             font-weight: 600;
@@ -93,19 +94,19 @@ st.markdown(
             border-left: 4px solid #1D4ED8;
             padding-left: 10px;
         }
-        /* 5) Input field labels & boxes */
-        .stTextInput > label,
-        .stNumberInput > label,
-        .stDateInput > label,
+        /* ──────────────── INPUT FIELDS ───────────────── */
+        .stTextInput > label, 
+        .stNumberInput > label, 
+        .stDateInput > label, 
         .stSelectbox > label {
             color: #FFFFFF !important;
             font-size: 0.95rem;
             font-weight: 500;
             margin-bottom: 4px;
         }
-        .stTextInput input[type="text"],
-        .stNumberInput input[type="number"],
-        .stDateInput input[type="text"],
+        .stTextInput input[type="text"], 
+        .stNumberInput input[type="number"], 
+        .stDateInput input[type="text"], 
         .stSelectbox select {
             background: #F5F5F5 !important;
             color: #000000 !important;
@@ -114,7 +115,7 @@ st.markdown(
             padding: 8px !important;
             width: 100% !important;
         }
-        /* 6a) “Add Vessel” & “Add Task” buttons: dark-navy text on white box */
+        /* ──────────────── “Add Vessel” & “Add Task” BUTTONS ───────────────── */
         .add-form-button .stButton > button {
             background: #FFFFFF !important;
             color: #0B1D3A !important;
@@ -129,7 +130,7 @@ st.markdown(
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
-        /* 6b) All other standard buttons */
+        /* ──────────────── OTHER BUTTONS ───────────────── */
         .stButton > button {
             background: linear-gradient(135deg, #1E40AF, #3B82F6) !important;
             color: #FFFFFF !important;
@@ -143,7 +144,7 @@ st.markdown(
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
-        /* 7) Cards (Vessels & Tasks) */
+        /* ──────────────── CARDS (VESSELS & TASKS) ───────────────── */
         .card {
             background: rgba(255,255,255,0.1);
             border-radius: 8px;
@@ -159,7 +160,7 @@ st.markdown(
             color: #E0E0E0;
             margin: 2px 0;
         }
-        /* 8) Expander styling */
+        /* ──────────────── EXPANDER STYLING ───────────────── */
         .stExpander > button {
             background: rgba(255,255,255,0.1) !important;
             border: none;
@@ -178,7 +179,7 @@ st.markdown(
             color: #FFFFFF !important;
             font-weight: 500 !important;
         }
-        /* 9) Gantt chart: legend & text dark-navy */
+        /* ──────────────── GANTT CHART LEGEND & TEXT ───────────────── */
         .js-plotly-plot .legendtext {
             fill: #0B1D3A !important;
         }
@@ -191,7 +192,7 @@ st.markdown(
 )
 
 # ────────────────────────────────────────────────────────────────────────────────
-# DATA MODELS
+# 3) DATA MODELS
 # ────────────────────────────────────────────────────────────────────────────────
 class Vessel:
     def __init__(
@@ -212,16 +213,21 @@ class Vessel:
         self.vessel_km = vessel_km
         self.start_date = start_date
 
-        # Convert hours→days if needed
-        self.transit_days = self._convert_to_days(transit, transit_unit)
-        self.weather_days = self._convert_to_days(weather, weather_unit)
-        self.maintenance_days = self._convert_to_days(maintenance, maintenance_unit)
+        # Convert hours → days if needed
+        self.transit_days      = self._convert_to_days(transit, transit_unit)
+        self.weather_days      = self._convert_to_days(weather, weather_unit)
+        self.maintenance_days  = self._convert_to_days(maintenance, maintenance_unit)
 
         # Survey days = (vessel_km) / (speed * 24)
         self.survey_days = round(self.vessel_km / (DEFAULT_SURVEY_SPEED * 24), 2)
-        self.total_days = round(
-            self.survey_days + self.transit_days + self.weather_days + self.maintenance_days, 2
+        self.total_days  = round(
+            self.survey_days
+            + self.transit_days
+            + self.weather_days
+            + self.maintenance_days,
+            2
         )
+        # fractional days in timedelta are converted to seconds internally
         self.end_date = self.start_date + datetime.timedelta(days=self.total_days)
 
     def _convert_to_days(self, val: float, unit: str) -> float:
@@ -269,22 +275,22 @@ class Task:
         pause_survey: bool = False,
         id: Optional[str] = None
     ):
-        self.id = id or str(uuid4())
-        self.name = name
-        self.task_type = task_type
+        self.id         = id or str(uuid4())
+        self.name       = name
+        self.task_type  = task_type
         self.start_date = start_date
-        self.end_date = end_date
-        self.vessel_id = vessel_id
+        self.end_date   = end_date
+        self.vessel_id  = vessel_id
         self.pause_survey = pause_survey
 
     def to_dict(self) -> Dict:
         return {
-            "id": self.id,
-            "name": self.name,
-            "task_type": self.task_type,
-            "start_date": str(self.start_date),
-            "end_date": str(self.end_date),
-            "vessel_id": self.vessel_id,
+            "id":          self.id,
+            "name":        self.name,
+            "task_type":   self.task_type,
+            "start_date":  str(self.start_date),
+            "end_date":    str(self.end_date),
+            "vessel_id":   self.vessel_id,
             "pause_survey": self.pause_survey,
         }
 
@@ -310,21 +316,21 @@ class Project:
         infill_pct: float,
         id: Optional[str] = None
     ):
-        self.id = id or str(uuid4())
-        self.name = name
+        self.id           = id or str(uuid4())
+        self.name         = name
         self.total_line_km = total_line_km
-        self.infill_pct = infill_pct
+        self.infill_pct   = infill_pct
         self.vessels: List[Vessel] = []
-        self.tasks: List[Task] = []
+        self.tasks: List[Task]       = []
 
     def to_dict(self) -> Dict:
         return {
-            "id": self.id,
-            "name": self.name,
+            "id":            self.id,
+            "name":          self.name,
             "total_line_km": self.total_line_km,
-            "infill_pct": self.infill_pct,
-            "vessels": [v.to_dict() for v in self.vessels],
-            "tasks": [t.to_dict() for t in self.tasks],
+            "infill_pct":    self.infill_pct,
+            "vessels":       [v.to_dict() for v in self.vessels],
+            "tasks":         [t.to_dict() for t in self.tasks],
         }
 
     @staticmethod
@@ -336,12 +342,12 @@ class Project:
             id=d["id"]
         )
         p.vessels = [Vessel.from_dict(v) for v in d.get("vessels", [])]
-        p.tasks = [Task.from_dict(t) for t in d.get("tasks", [])]
+        p.tasks   = [Task.from_dict(t)    for t in d.get("tasks", [])]
         return p
 
 
 # ────────────────────────────────────────────────────────────────────────────────
-# HELPER: Current project object
+# 4) HELPER: Get “current” Project object
 # ────────────────────────────────────────────────────────────────────────────────
 def get_current_project() -> Optional[Project]:
     pid = st.session_state.get("current_project_id")
@@ -354,7 +360,7 @@ def get_current_project() -> Optional[Project]:
 
 
 # ────────────────────────────────────────────────────────────────────────────────
-# SECTION 1) PROJECT CREATION / SELECTION
+# 5) SECTION 1: CREATE / SELECT PROJECT
 # ────────────────────────────────────────────────────────────────────────────────
 st.markdown(
     '<div class="stHeader"><h1><i class="fas fa-water"></i> Hydrographic Survey Estimator</h1></div>',
@@ -365,8 +371,8 @@ st.markdown('<div class="section-header">1) Create / Select Project</div>', unsa
 
 col1, col2, col3 = st.columns([2, 2, 1])
 with col1:
-    project_names = [p.name for p in st.session_state.get("projects", [])]
-    project_options = ["➕ New Project"] + project_names
+    project_names    = [p.name for p in st.session_state.get("projects", [])]
+    project_options  = ["➕ New Project"] + project_names
     idx = 0
     if st.session_state.get("current_project_id") is not None:
         cp = get_current_project()
@@ -382,18 +388,19 @@ with col1:
 
 with col2:
     if sel == "➕ New Project":
-        new_name = st.text_input("New Project Name", value="", placeholder="e.g. Gulf Survey 2025")
-        new_line_km_text = st.text_input("Total Line Km to Survey", value="0.00", placeholder="0.00")
+        new_name        = st.text_input("New Project Name", value="", placeholder="e.g. Gulf Survey 2025")
+        new_line_km_text= st.text_input("Total Line Km to Survey", value="0.00", placeholder="0.00")
         new_infill_text = st.text_input("Infill %", value="0.00", placeholder="0.00")
+
         if st.button("Create Project", key="create_project"):
             # Convert text inputs to floats
             try:
                 new_line_km = float(new_line_km_text)
-                new_infill = float(new_infill_text)
+                new_infill  = float(new_infill_text)
             except ValueError:
                 st.error("Line Km and Infill % must be valid numbers.")
                 new_line_km = None
-                new_infill = None
+                new_infill  = None
 
             if not new_name.strip():
                 st.error("Project name cannot be empty.")
@@ -402,9 +409,14 @@ with col2:
             elif new_infill is None or not (0 <= new_infill <= 100):
                 st.error("Infill % must be between 0 and 100.")
             else:
-                proj = Project(name=new_name.strip(), total_line_km=new_line_km, infill_pct=new_infill)
+                proj = Project(
+                    name=new_name.strip(),
+                    total_line_km=new_line_km,
+                    infill_pct=new_infill
+                )
                 st.session_state["projects"].append(proj)
                 st.session_state["current_project_id"] = proj.id
+
     else:
         # User selected an existing project; store its ID
         chosen = sel
@@ -415,8 +427,8 @@ with col2:
 with col3:
     if st.button("Clear Project", key="clear_project"):
         st.session_state["current_project_id"] = None
-        st.session_state["editing_vessel"] = None
-        st.session_state["editing_task"] = None
+        st.session_state["editing_vessel"]     = None
+        st.session_state["editing_task"]       = None
 
 current_project = get_current_project()
 if current_project is None:
@@ -427,7 +439,7 @@ if current_project is None:
     st.stop()
 
 # ────────────────────────────────────────────────────────────────────────────────
-# SECTION 2) ADD / EDIT / DELETE VESSELS
+# 6) SECTION 2: ADD / EDIT / DELETE VESSELS
 # ────────────────────────────────────────────────────────────────────────────────
 st.markdown(
     f'<div class="section-header">2) Vessel Fleet (for “{current_project.name}”)</div>',
@@ -440,25 +452,25 @@ with st.expander("🚢 Add New Vessel", expanded=False):
     with st.form("vessel_form"):
         colA, colB, colC = st.columns([3, 2, 1])
         with colA:
-            vessel_name = st.text_input("Vessel Name*", placeholder="e.g. Orca Explorer")
-            vessel_km_text = st.text_input("Line Km for this Vessel*", value="0.00", placeholder="0.00")
-            start_date = st.date_input("Start Date*", value=datetime.date.today())
+            vessel_name     = st.text_input("Vessel Name*", placeholder="e.g. Orca Explorer")
+            vessel_km_text  = st.text_input("Line Km for this Vessel*", value="0.00", placeholder="0.00")
+            start_date      = st.date_input("Start Date*", value=datetime.date.today())
         with colB:
-            transit_text = st.text_input("Transit Duration*", value="0.00", placeholder="0.00")
-            weather_text = st.text_input("Weather Downtime*", value="0.00", placeholder="0.00")
-            maintenance_text = st.text_input("Maintenance*", value="0.00", placeholder="0.00")
+            transit_text    = st.text_input("Transit Duration*", value="0.00", placeholder="0.00")
+            weather_text    = st.text_input("Weather Downtime*", value="0.00", placeholder="0.00")
+            maintenance_text= st.text_input("Maintenance*", value="0.00", placeholder="0.00")
         with colC:
-            transit_unit = st.selectbox("Unit", ["days", "hours"], index=0, key="transit_unit")
-            weather_unit = st.selectbox("", ["days", "hours"], index=0, key="weather_unit")
-            maintenance_unit = st.selectbox("", ["days", "hours"], index=0, key="maintenance_unit")
+            transit_unit    = st.selectbox("Unit", ["days", "hours"], index=0, key="transit_unit")
+            weather_unit    = st.selectbox("", ["days", "hours"], index=0, key="weather_unit")
+            maintenance_unit= st.selectbox("", ["days", "hours"], index=0, key="maintenance_unit")
 
         submitted = st.form_submit_button("Add Vessel")
         if submitted:
             try:
                 vkm = float(vessel_km_text)
-                tr = float(transit_text)
-                wt = float(weather_text)
-                mt = float(maintenance_text)
+                tr  = float(transit_text)
+                wt  = float(weather_text)
+                mt  = float(maintenance_text)
             except ValueError:
                 st.error("Line Km, Transit, Weather, and Maintenance must all be valid numbers.")
                 vkm = tr = wt = mt = None
@@ -508,7 +520,7 @@ for v in current_project.vessels:
                     <p><strong>Breakdown:</strong> Survey: {v.survey_days} d |
                       Transit: {v.transit_days} d |
                       Weather: {v.weather_days} d |
-                      Maint: {v.maintenance_days} d
+                      Maintenance: {v.maintenance_days} d
                     </p>
                 </div>
                 """,
@@ -520,8 +532,8 @@ for v in current_project.vessels:
         with c3:
             if st.button("🗑️ Delete", key=f"del_v_{v.id}"):
                 current_project.vessels = [x for x in current_project.vessels if x.id != v.id]
-                # Remove tasks assigned to this vessel
-                current_project.tasks = [t for t in current_project.tasks if t.vessel_id != v.id]
+                # Remove any tasks assigned to this vessel
+                current_project.tasks   = [t for t in current_project.tasks   if t.vessel_id != v.id]
                 st.success(f"Deleted vessel '{v.name}'.")
 
 # — Edit Vessel Expander
@@ -534,20 +546,23 @@ if st.session_state.get("editing_vessel"):
             with st.form(f"vessel_edit_form_{to_edit.id}"):
                 eA, eB, eC = st.columns([3, 2, 1])
                 with eA:
-                    new_name = st.text_input("Vessel Name*", value=to_edit.name)
-                    new_km_text = st.text_input("Line Km*", value=str(to_edit.vessel_km))
-                    new_start = st.date_input("Start Date*", value=to_edit.start_date)
+                    new_name       = st.text_input("Vessel Name*", value=to_edit.name)
+                    new_km_text    = st.text_input("Line Km*", value=str(to_edit.vessel_km))
+                    new_start      = st.date_input("Start Date*", value=to_edit.start_date)
                 with eB:
                     new_transit_text = st.text_input(
-                        "Transit Duration*", value=str(to_edit.transit_days),
+                        "Transit Duration*", 
+                        value=str(to_edit.transit_days),
                         key=f"et_{to_edit.id}_transit_text"
                     )
                     new_weather_text = st.text_input(
-                        "Weather Downtime*", value=str(to_edit.weather_days),
+                        "Weather Downtime*", 
+                        value=str(to_edit.weather_days),
                         key=f"ew_{to_edit.id}_weather_text"
                     )
-                    new_maint_text = st.text_input(
-                        "Maintenance*", value=str(to_edit.maintenance_days),
+                    new_maint_text   = st.text_input(
+                        "Maintenance*", 
+                        value=str(to_edit.maintenance_days),
                         key=f"em_{to_edit.id}_maint_text"
                     )
                 with eC:
@@ -559,7 +574,7 @@ if st.session_state.get("editing_vessel"):
                         "", ["days", "hours"], index=0,
                         key=f"ew_{to_edit.id}_wunit"
                     )
-                    new_maint_unit = st.selectbox(
+                    new_maint_unit   = st.selectbox(
                         "", ["days", "hours"], index=0,
                         key=f"em_{to_edit.id}_munit"
                     )
@@ -603,6 +618,7 @@ if st.session_state.get("editing_vessel"):
                             maintenance_unit=new_maint_unit,
                             id=to_edit.id
                         )
+                        # Replace the old vessel
                         current_project.vessels = [
                             x for x in current_project.vessels if x.id != to_edit.id
                         ] + [updated_v]
@@ -611,7 +627,7 @@ if st.session_state.get("editing_vessel"):
             st.markdown('</div>', unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────────────────────────────────────
-# SECTION 3) ADD / EDIT / DELETE TASKS
+# 7) SECTION 3: ADD / EDIT / DELETE TASKS
 # ────────────────────────────────────────────────────────────────────────────────
 st.markdown(
     f'<div class="section-header">3) Task Register (for “{current_project.name}”)</div>',
@@ -622,7 +638,7 @@ st.markdown(
 with st.expander("📝 Add New Task", expanded=False):
     st.markdown('<div class="add-form-button">', unsafe_allow_html=True)
     with st.form("task_form"):
-        # First: Task Type (auto‐populate Task Name)
+        # First: Task Type (auto‐populate Task Name if not “Other”)
         task_type = st.selectbox(
             "Task Type*",
             [
@@ -653,7 +669,7 @@ with st.expander("📝 Add New Task", expanded=False):
         col1, col2 = st.columns(2)
         with col1:
             start_date_t = st.date_input("Start Date*", key="new_task_start")
-            end_date_t = st.date_input(
+            end_date_t   = st.date_input(
                 "End Date*",
                 value=datetime.date.today() + datetime.timedelta(days=1),
                 key="new_task_end"
@@ -669,7 +685,7 @@ with st.expander("📝 Add New Task", expanded=False):
             )
             pause_survey = st.checkbox("Pause Survey Operations", key="new_task_pause")
         with col2:
-            st.write("")
+            st.write("")  # spacing
             st.write("")
 
         add_task_btn = st.form_submit_button("Add Task")
@@ -730,22 +746,22 @@ for t in current_project.tasks:
 
 # — Edit Task Expander
 if st.session_state.get("editing_task"):
-    edit_tid = st.session_state["editing_task"]
+    edit_tid  = st.session_state["editing_task"]
     to_edit_t = next((x for x in current_project.tasks if x.id == edit_tid), None)
     if to_edit_t is not None:
         with st.expander(f"✏️ Edit Task: {to_edit_t.name}", expanded=True):
             st.markdown('<div class="add-form-button">', unsafe_allow_html=True)
             with st.form(f"task_edit_form_{to_edit_t.id}"):
-                # First: Task Type
+                # Determine if existing task_type is one of the predefined ones
                 existing_task_type = to_edit_t.task_type
                 if existing_task_type in [
                     "Survey", "Maintenance", "Weather", "Transit",
                     "Delay", "Sediment Sample", "Deployment", "Recovery"
                 ]:
-                    key_type_default = existing_task_type
+                    key_type_default  = existing_task_type
                     key_other_default = ""
                 else:
-                    key_type_default = "Other"
+                    key_type_default  = "Other"
                     key_other_default = existing_task_type
 
                 e_type = st.selectbox(
@@ -763,10 +779,14 @@ if st.session_state.get("editing_task"):
                 if e_type != "Other":
                     default_edit_name = to_edit_t.name if to_edit_t.name else e_type
                 else:
-                    default_edit_name = to_edit_t.name if to_edit_t.name not in [
-                        "Survey", "Maintenance", "Weather", "Transit",
-                        "Delay", "Sediment Sample", "Deployment", "Recovery"
-                    ] else key_other_default
+                    default_edit_name = (
+                        to_edit_t.name 
+                        if to_edit_t.name not in [
+                            "Survey", "Maintenance", "Weather", "Transit",
+                            "Delay", "Sediment Sample", "Deployment", "Recovery"
+                        ] 
+                        else key_other_default
+                    )
 
                 e_name = st.text_input(
                     "Task Name*",
@@ -815,7 +835,7 @@ if st.session_state.get("editing_task"):
                         key=f"edit_pause_{to_edit_t.id}"
                     )
                 with colE2:
-                    st.write("")
+                    st.write("")  # spacing
                     st.write("")
 
                 update_task_btn = st.form_submit_button("Update Task")
@@ -852,7 +872,7 @@ if st.session_state.get("editing_task"):
             st.markdown('</div>', unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────────────────────────────────────
-# SECTION 4) DATA MANAGEMENT (EXPORT / IMPORT)
+# 8) SECTION 4: DATA MANAGEMENT (EXPORT / IMPORT)
 # ────────────────────────────────────────────────────────────────────────────────
 st.markdown('<div class="section-header">4) Data Management</div>', unsafe_allow_html=True)
 
@@ -880,7 +900,7 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                 for p in st.session_state.get("projects", []):
                     proj_rows.append({
                         "project_id": p.id,
-                        "name": p.name,
+                        "name":       p.name,
                         "total_line_km": p.total_line_km,
                         "infill_pct": p.infill_pct
                     })
@@ -920,9 +940,9 @@ with st.expander("💾 Export / Import Projects", expanded=False):
         if uploaded_file is not None and st.button("Import Data", key="import_data"):
             try:
                 if uploaded_file.name.lower().endswith(".json"):
-                    raw = uploaded_file.read().decode("utf-8")
+                    raw     = uploaded_file.read().decode("utf-8")
                     data_in = json.loads(raw)
-                    proj_dicts = data_in.get("projects", [])
+                    proj_dicts  = data_in.get("projects", [])
                     new_projects = [Project.from_dict(d) for d in proj_dicts]
                     st.session_state["projects"] = new_projects
                     if new_projects:
@@ -935,7 +955,7 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                     xls = pd.ExcelFile(uploaded_file)
                     if "Projects" not in xls.sheet_names:
                         raise ValueError("Excel must contain a sheet named 'Projects'.")
-                    proj_df = xls.parse("Projects")
+                    proj_df      = xls.parse("Projects")
                     new_projects = []
                     for idx, row in proj_df.iterrows():
                         p = Project(
@@ -951,12 +971,12 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                         for idx, row in ves_df.iterrows():
                             pid = str(row["project_id"])
                             v = Vessel.from_dict({
-                                "id": str(row["id"]),
-                                "name": row["name"],
-                                "vessel_km": row["vessel_km"],
-                                "start_date": row["start_date"],
-                                "transit_days": row["transit_days"],
-                                "weather_days": row["weather_days"],
+                                "id":            str(row["id"]),
+                                "name":          row["name"],
+                                "vessel_km":     row["vessel_km"],
+                                "start_date":    row["start_date"],
+                                "transit_days":  row["transit_days"],
+                                "weather_days":  row["weather_days"],
                                 "maintenance_days": row["maintenance_days"]
                             })
                             for p in new_projects:
@@ -969,12 +989,12 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                         for idx, row in task_df.iterrows():
                             pid = str(row["project_id"])
                             t = Task.from_dict({
-                                "id": str(row["id"]),
-                                "name": row["name"],
-                                "task_type": row["task_type"],
-                                "start_date": row["start_date"],
-                                "end_date": row["end_date"],
-                                "vessel_id": row["vessel_id"],
+                                "id":          str(row["id"]),
+                                "name":        row["name"],
+                                "task_type":   row["task_type"],
+                                "start_date":  row["start_date"],
+                                "end_date":    row["end_date"],
+                                "vessel_id":   row["vessel_id"],
                                 "pause_survey": bool(row["pause_survey"])
                             })
                             for p in new_projects:
@@ -994,22 +1014,14 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                 st.error(f"Error importing: {e}")
 
 # ────────────────────────────────────────────────────────────────────────────────
-# SECTION 5) PROJECT TIMELINE (GANTT CHART)
+# 9) SECTION 5: PROJECT TIMELINE (GANTT CHART)
 # ────────────────────────────────────────────────────────────────────────────────
-import plotly.graph_objects as go
-
-st.markdown(
-    '<div class="section-header">5) Project Timeline (Gantt Chart)</div>', 
-    unsafe_allow_html=True
-)
+st.markdown('<div class="section-header">5) Project Timeline (Gantt Chart)</div>', unsafe_allow_html=True)
 
 proj = get_current_project()
 if proj is None:
     st.stop()
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 5.a) Build the timeline DataFrame exactly as before
-# ────────────────────────────────────────────────────────────────────────────────
 def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
     rows = []
     for v in vessels:
@@ -1027,7 +1039,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
             t_start = pd.to_datetime(t.start_date)
             t_end   = pd.to_datetime(t.end_date)
 
-            # 1) A “survey” segment up to the pause
+            # 1) “Survey” segment up to the pause
             if t_start > current_start:
                 rows.append({
                     "Resource": v.name,
@@ -1036,7 +1048,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                     "Start":    current_start,
                     "Finish":   t_start
                 })
-            # 2) The “pause” segment (e.g. Sediment Sample, Weather, etc.)
+            # 2) The “pause” segment
             rows.append({
                 "Resource": v.name,
                 "Task":     t.name,
@@ -1046,7 +1058,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
             })
             current_start = t_end
 
-        # If anything remains after the last pause, draw the final “survey”
+        # 3) Final “survey” after last pause (if still time left)
         if current_start < survey_end:
             rows.append({
                 "Resource": v.name,
@@ -1056,7 +1068,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                 "Finish":   survey_end
             })
 
-    # Unassigned tasks (will appear in their own “Unassigned” row)
+    # Unassigned tasks
     for t in tasks:
         if t.vessel_id is None:
             rows.append({
@@ -1069,7 +1081,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
 
     df = pd.DataFrame(rows)
     if not df.empty:
-        # Force sorting by “Resource” so that all bars for Vessel A appear before Vessel B, etc.
+        # Sort by Resource, then Start
         df["Resource"] = pd.Categorical(df["Resource"], categories=sorted(df["Resource"].unique()), ordered=True)
         df = df.sort_values(["Resource", "Start"])
     return df
@@ -1084,52 +1096,37 @@ if timeline_df.empty:
     st.stop()
 
 # ────────────────────────────────────────────────────────────────────────────────
-# 5.b) Define “milestones” – example: (these could come from your data model or be hard‐coded)
+# 9.a) Example Milestones (adjust or remove if undesired)
 # ────────────────────────────────────────────────────────────────────────────────
-# In a real application, you might store milestone dates in the Project object.
-# Here we’ll demonstrate with four fixed dates—just like your example image:
 milestones = [
     {"date": "2023-08-01", "label": "Milestone 1"},
     {"date": "2024-01-17", "label": "Milestone 2"},
     {"date": "2024-05-01", "label": "Milestone 3"},
     {"date": "2024-07-01", "label": "Milestone 4"},
 ]
-# Convert to Timestamp so Plotly can place them correctly:
 for m in milestones:
     m["ts"] = pd.to_datetime(m["date"])
 
 # ────────────────────────────────────────────────────────────────────────────────
-# 5.c) Build a Plotly Figure by hand (go.Figure) so that we can layer:
-#       • alternating background “lanes” (white vs. light‐gray) for each resource
-#       • small month‐bars along the top
-#       • vertical milestone triangles
-#       • the “today” line
-#       • properly colored bars for each Type
+# 9.b) BUILD THE PLOTLY GANTT BY HAND (go.Figure)
 # ────────────────────────────────────────────────────────────────────────────────
-
-from calendar import month_abbr
-
-# 1) Figure scaffolding
+# 1) Prepare Figure
 fig = go.Figure()
 
-# 2) Determine unique resources (vessel names + “Unassigned”) and their vertical positions
+# 2) Identify unique resources and assign them Y‐positions
 resources = list(timeline_df["Resource"].cat.categories)
-n_rows = len(resources)
-
-# We’ll assign each resource a Y‐position: 0, 1, 2, … up to (n_rows−1), then invert the axis later.
-# But for easier plotting of background shapes, let’s treat each row as: row_index ± 0.4 as vertical span.
+n_rows    = len(resources)
 row_positions = { r: i for i, r in enumerate(resources) }
 
-# 3) Draw alternating “striped” background lanes (white → very light gray) for readability
+# 3) Draw alternating background “lanes”
 for r, idx in row_positions.items():
-    # Every even‐indexed row = white, every odd‐indexed row = #F2F2F2
     lane_color = "#F2F2F2" if (idx % 2) else "#FFFFFF"
     fig.add_shape(
         type="rect",
         xref="x",
         yref="y",
-        x0=timeline_df["Start"].min() - pd.Timedelta(days=7),  # extend a bit left
-        x1=timeline_df["Finish"].max() + pd.Timedelta(days=7),  # extend a bit right
+        x0=timeline_df["Start"].min() - pd.Timedelta(days=7),
+        x1=timeline_df["Finish"].max() + pd.Timedelta(days=7),
         y0=idx - 0.4,
         y1=idx + 0.4,
         fillcolor=lane_color,
@@ -1137,16 +1134,12 @@ for r, idx in row_positions.items():
         layer="below"
     )
 
-# 4) Draw the month bars at the top (like a “mini‐Gantt‐header”)
-# Find the full min/max range of your timeline:
+# 4) Draw month bars at the top
 overall_start = timeline_df["Start"].min().floor("D")
 overall_end   = timeline_df["Finish"].max().ceil("D")
-# Build a month‐by‐month frame from overall_start → overall_end
-all_months = pd.date_range(overall_start, overall_end, freq="MS")
-
+all_months    = pd.date_range(overall_start, overall_end, freq="MS")
 for i, month_start in enumerate(all_months):
     month_end = (month_start + pd.offsets.MonthEnd(1))
-    # Light‐blue shading for alternating months, transparent otherwise
     month_color = "#BFD7EA" if (i % 2) else "#DCEAF6"
     fig.add_shape(
         type="rect",
@@ -1154,13 +1147,12 @@ for i, month_start in enumerate(all_months):
         yref="paper",
         x0=month_start,
         x1=month_end,
-        y0=1.00,    # top of paper
-        y1=1.03,    # slight strip above top
+        y0=1.00,
+        y1=1.03,
         fillcolor=month_color,
         line_width=0,
         layer="above"
     )
-    # Month label
     fig.add_annotation(
         x=month_start + (month_end - month_start) / 2,
         y=1.035,
@@ -1172,20 +1164,19 @@ for i, month_start in enumerate(all_months):
         align="center"
     )
 
-# 5) Draw milestone markers (little red triangles + text)
+# 5) Draw milestone triangles and labels
 for m in milestones:
     fig.add_shape(
         type="path",
         path=(
-            f"M {m['ts']}, {n_rows - 0.15} "                 # Move to bottom‐point of triangle
-            f"L {m['ts'] - pd.Timedelta(days=3)}, {n_rows + 0.20} "   # Line to top‐left
-            f"L {m['ts'] + pd.Timedelta(days=3)}, {n_rows + 0.20} Z"   # Line to top‐right & close
+            f"M {m['ts']}, {n_rows - 0.15} "
+            f"L {m['ts'] - pd.Timedelta(days=3)}, {n_rows + 0.20} "
+            f"L {m['ts'] + pd.Timedelta(days=3)}, {n_rows + 0.20} Z"
         ),
         fillcolor="#DB504A",
         line_color="#DB504A",
         layer="above"
     )
-    # Milestone label above the triangle
     fig.add_annotation(
         x=m["ts"],
         y=n_rows + 0.30,
@@ -1197,7 +1188,7 @@ for m in milestones:
         align="center"
     )
 
-# 6) Draw the “Today” vertical line (bold red)
+# 6) Draw “Today” line if in range
 today_ts = pd.to_datetime(datetime.date.today())
 if overall_start <= today_ts <= overall_end:
     fig.add_shape(
@@ -1223,33 +1214,32 @@ if overall_start <= today_ts <= overall_end:
         align="center"
     )
 
-# 7) Plot each bar segment (one trace per “Type” for color grouping)
-#    We’ll iterate through timeline_df row by row and add a single bar for each.
+# 7) Plot each bar segment (one go.Bar per row)
 for _, row in timeline_df.iterrows():
-    y_idx = row_positions[row["Resource"]]
-    # Choose the correct color:
-    bar_color = COLOR_MAP.get(row["Type"], COLOR_MAP["Other"])
+    y_idx         = row_positions[row["Resource"]]
+    duration_days = (row["Finish"] - row["Start"]).total_seconds() / 86400.0
+    bar_color     = COLOR_MAP.get(row["Type"], COLOR_MAP["Other"])
     fig.add_trace(
         go.Bar(
-            x=[(row["Finish"] - row["Start"]).days],
-            y=[n_rows - 1 - y_idx],  # invert y so that idx=0 is top
+            x=[duration_days],
+            y=[n_rows - 1 - y_idx],  # invert so idx=0 is top row
             base=[row["Start"]],
             orientation="h",
             marker_color=bar_color,
             marker_line_width=0,
             width=0.5,
             hovertemplate=(
-                "<b>%{customdata[0]}</b><br>"  # task name
-                + "Type: %{customdata[1]}<br>"
-                + "Start: %{base|%Y-%m-%d}<br>"
-                + "Finish: %{x|%Y-%m-%d}<br>"
-                + "<extra></extra>"
+                "<b>%{customdata[0]}</b><br>"
+                "Type: %{customdata[1]}<br>"
+                "Start: %{base|%Y-%m-%d}<br>"
+                "Finish: %{base + x|%Y-%m-%d}<br>"
+                "<extra></extra>"
             ),
             customdata=[[row["Task"], row["Type"]]]
         )
     )
 
-# 8) Final layout tweaks: axes, sizing, fonts
+# 8) Axis formatting
 fig.update_yaxes(
     tickmode="array",
     tickvals=[n_rows - 1 - i for i in range(n_rows)],
@@ -1258,9 +1248,8 @@ fig.update_yaxes(
     range=[-0.5, n_rows - 0.5],
     title_text="",
     tickfont=dict(color="#0B1D3A", size=12, family="Arial"),
-    gridcolor="rgba(0,0,0,0)",  # no horizontal grid lines
+    gridcolor="rgba(0,0,0,0)"
 )
-
 fig.update_xaxes(
     tickformat="%b %d %Y",
     tickfont=dict(color="#0B1D3A", size=11, family="Arial"),
@@ -1270,14 +1259,20 @@ fig.update_xaxes(
     gridcolor="rgba(200,200,200,0.2)"
 )
 
+# 9) Final layout tweaks
 fig.update_layout(
-    height=max(400, 80 * n_rows),  # 80 px per row minimum
+    height=max(400, 80 * n_rows),
     margin=dict(l=10, r=10, t=50, b=50),
-    plot_bgcolor="#FFFFFF",   # white “track” area
-    paper_bgcolor="rgba(0,0,0,0)",  # transparent behind
-    title=dict(text=f"Gantt Chart ► {proj.name}", font_size=20, font_color="#0B1D3A", x=0.01),
+    plot_bgcolor="#FFFFFF",           # white “track” area
+    paper_bgcolor="rgba(0,0,0,0)",     # transparent behind
+    title=dict(
+        text=f"Gantt Chart ► {proj.name}",
+        font_size=20,
+        font_color="#0B1D3A",
+        x=0.01
+    ),
     showlegend=False
 )
 
-# 9) Finally, send it to Streamlit
+# 10) Render in Streamlit
 st.plotly_chart(fig, use_container_width=True)
