@@ -40,7 +40,7 @@ COLOR_MAP = {
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
-# INJECT CUSTOM CSS (all fixes: immediate input focus, button/text color, etc.)
+# INJECT CUSTOM CSS (button/text color, white “No…” messages, etc.)
 # ────────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Hydrographic Survey Estimator",
@@ -114,7 +114,7 @@ st.markdown(
             padding: 8px !important;
             width: 100% !important;
         }
-        /* 6a) “Add Vessel” & “Add Task” buttons: dark-navy text on white box */
+        /* 6a) “Add Vessel” & “Add Task” buttons: dark‐navy text on white box */
         .add-form-button .stButton > button {
             background: #FFFFFF !important;
             color: #0B1D3A !important;
@@ -178,7 +178,7 @@ st.markdown(
             color: #FFFFFF !important;
             font-weight: 500 !important;
         }
-        /* 9) Gantt chart: legend & text dark-navy */
+        /* 9) Gantt chart: legend & text dark‐navy */
         .js-plotly-plot .legendtext {
             fill: #0B1D3A !important;
         }
@@ -669,7 +669,7 @@ with st.expander("📝 Add New Task", expanded=False):
             )
             pause_survey = st.checkbox("Pause Survey Operations", key="new_task_pause")
         with col2:
-            st.write("")
+            st.write("")  # empty right column
             st.write("")
 
         add_task_btn = st.form_submit_button("Add Task")
@@ -1023,6 +1023,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                     "Task":    f"Survey ► {v.name}",
                     "Start":   cur_start,
                     "Finish":  t_start,
+                    # ─── IMPORTANT: make sure this is exactly v.name every time ───
                     "Resource": v.name,
                     "Type":    "Survey"
                 })
@@ -1030,6 +1031,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                 "Task":     t.name,
                 "Start":    t_start,
                 "Finish":   t_end,
+                # ─── This must also be exactly v.name, not something like v.name + " " ───
                 "Resource": v.name,
                 "Type":     t.task_type
             })
@@ -1040,6 +1042,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                 "Task":     f"Survey ► {v.name}",
                 "Start":    cur_start,
                 "Finish":   survey_end,
+                # ─── Again, “Resource”: v.name ───
                 "Resource": v.name,
                 "Type":     "Survey"
             })
