@@ -12,21 +12,15 @@ from typing import List, Dict, Optional
 # ────────────────────────────────────────────────────────────────────────────────
 def init_session_state():
     if "projects" not in st.session_state:
-        st.session_state["projects"] = []              # List[Project]
+        st.session_state["projects"] = []  # List[Project]
     if "current_project_id" not in st.session_state:
         st.session_state["current_project_id"] = None
     if "editing_vessel" not in st.session_state:
-        st.session_state["editing_vessel"] = None      # vessel_id being edited (or None)
+        st.session_state["editing_vessel"] = None  # vessel_id being edited
     if "editing_task" not in st.session_state:
-        st.session_state["editing_task"] = None        # task_id being edited (or None)
+        st.session_state["editing_task"] = None  # task_id being edited
 
 init_session_state()
-
-# ────────────────────────────────────────────────────────────────────────────────
-# SAFE RERUN (to immediately reflect session_state changes)
-# ────────────────────────────────────────────────────────────────────────────────
-def safe_rerun():
-    st.experimental_rerun()
 
 # ────────────────────────────────────────────────────────────────────────────────
 # CONSTANTS & COLOR MAP for the Gantt chart
@@ -143,7 +137,7 @@ st.markdown(
         }
 
         /* 7. Button Styling */
-        /*   a) “Add Vessel” / “Add Task” (inside .add‐form‐button container) */
+        /*   a) “Add Vessel” / “Add Task” (inside .add-form-button container) */
         .add-form-button .stButton > button {
             background: #FFFFFF !important;  
             color: #0B1D3A !important;        /* dark‐navy text */
@@ -423,26 +417,21 @@ with col2:
                 proj = Project(name=new_name.strip(), total_line_km=new_line_km, infill_pct=new_infill)
                 st.session_state["projects"].append(proj)
                 st.session_state["current_project_id"] = proj.id
-                safe_rerun()
     else:
         # User selected an existing project
         chosen = sel
         for p in st.session_state.get("projects", []):
             if p.name == chosen:
-                if st.session_state.get("current_project_id") != p.id:
-                    st.session_state["current_project_id"] = p.id
-                    safe_rerun()
+                st.session_state["current_project_id"] = p.id
 
 with col3:
     if st.button("Clear Project", key="clear_project"):
         st.session_state["current_project_id"] = None
         st.session_state["editing_vessel"] = None
         st.session_state["editing_task"] = None
-        safe_rerun()
 
 current_project = get_current_project()
 if current_project is None:
-    # Render “No project selected…” in pure white
     st.markdown(
         '<span style="color:#FFFFFF;">No project selected. Create a new project above to begin.</span>',
         unsafe_allow_html=True
@@ -457,7 +446,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# — Add New Vessel Form (inside .add-form-button container so the text/border is dark‐navy)
+# — Add New Vessel Form (inside .add-form-button container)
 with st.expander("🚢 Add New Vessel", expanded=False):
     st.markdown('<div class="add-form-button">', unsafe_allow_html=True)
     with st.form("vessel_form"):
@@ -505,7 +494,6 @@ with st.expander("🚢 Add New Vessel", expanded=False):
                 )
                 current_project.vessels.append(new_v)
                 st.success(f"Vessel '{vessel_name.strip()}' added!")
-                safe_rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 # — Display Existing Vessels, plus Edit/Delete buttons
@@ -531,19 +519,15 @@ for v in current_project.vessels:
         with c2:
             if st.button("✏️ Edit", key=f"edit_v_{v.id}"):
                 st.session_state["editing_vessel"] = v.id
-                safe_rerun()
         with c3:
             if st.button("🗑️ Delete", key=f"del_v_{v.id}"):
-                # Remove vessel + any tasks assigned to it
                 current_project.vessels = [x for x in current_project.vessels if x.id != v.id]
                 current_project.tasks = [t for t in current_project.tasks if t.vessel_id != v.id]
                 st.success(f"Deleted vessel '{v.name}'.")
-                safe_rerun()
 
-# — If a vessel is being edited, show a full‐width expander for editing
+# — If a vessel is being edited, show a full-width expander for editing
 if st.session_state.get("editing_vessel"):
     edit_id = st.session_state["editing_vessel"]
-    # Find the vessel object
     to_edit = next((x for x in current_project.vessels if x.id == edit_id), None)
     if to_edit is not None:
         with st.expander(f"✏️ Edit Vessel: {to_edit.name}", expanded=True):
@@ -614,14 +598,11 @@ if st.session_state.get("editing_vessel"):
                             maintenance_unit=new_maint_unit,
                             id=to_edit.id
                         )
-                        # Replace in the list
                         current_project.vessels = [
                             x for x in current_project.vessels if x.id != to_edit.id
                         ] + [updated_v]
                         st.success(f"Vessel '{new_name.strip()}' updated!")
-                        # Clear edit mode, then rerun
                         st.session_state["editing_vessel"] = None
-                        safe_rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -686,7 +667,6 @@ with st.expander("📝 Add New Task", expanded=False):
                 )
                 current_project.tasks.append(new_task)
                 st.success(f"Task '{task_name.strip()}' added!")
-                safe_rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 # — Display Existing Tasks + Edit/Delete Buttons
@@ -711,14 +691,12 @@ for t in current_project.tasks:
         with d2:
             if st.button("✏️ Edit", key=f"edit_t_{t.id}"):
                 st.session_state["editing_task"] = t.id
-                safe_rerun()
         with d3:
             if st.button("🗑️ Delete", key=f"del_t_{t.id}"):
                 current_project.tasks = [x for x in current_project.tasks if x.id != t.id]
                 st.success(f"Deleted task '{t.name}'.")
-                safe_rerun()
 
-# — If a task is being edited, show a full‐width expander for editing
+# — If a task is being edited, show a full-width expander for editing
 if st.session_state.get("editing_task"):
     edit_tid = st.session_state["editing_task"]
     to_edit_t = next((x for x in current_project.tasks if x.id == edit_tid), None)
@@ -809,7 +787,6 @@ if st.session_state.get("editing_task"):
                         ] + [updated_t]
                         st.success(f"Task '{new_name.strip()}' updated!")
                         st.session_state["editing_task"] = None
-                        safe_rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -892,7 +869,6 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                     else:
                         st.session_state["current_project_id"] = None
                     st.success("Imported from JSON successfully!")
-                    safe_rerun()
 
                 elif uploaded_file.name.lower().endswith(".xlsx"):
                     xls = pd.ExcelFile(uploaded_file)
@@ -951,7 +927,7 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                     else:
                         st.session_state["current_project_id"] = None
                     st.success("Imported from Excel successfully!")
-                    safe_rerun()
+
                 else:
                     st.error("Unsupported file type. Please upload .json or .xlsx.")
             except Exception as e:
@@ -1023,7 +999,6 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
 timeline_df = build_timeline_df(proj.vessels, proj.tasks)
 
 if timeline_df.empty:
-    # White “No timeline data...” message
     st.markdown(
         '<span style="color:#FFFFFF;">No timeline data available for this project. Add vessels/tasks above.</span>',
         unsafe_allow_html=True
