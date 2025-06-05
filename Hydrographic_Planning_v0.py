@@ -1044,7 +1044,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                 "Type": "Survey"
             })
 
-    # Unassigned tasks
+    # Unassigned tasks (no vessel)
     for t in tasks:
         if t.vessel_id is None:
             rows.append({
@@ -1065,6 +1065,7 @@ if timeline_df.empty:
         unsafe_allow_html=True
     )
 else:
+    # Create the Plotly timeline
     fig = px.timeline(
         timeline_df,
         x_start="Start",
@@ -1076,29 +1077,44 @@ else:
         title=f"Gantt Chart ► {proj.name}"
     )
 
-    # Reverse Y‐axis; dark‐navy tick labels
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Tweak Y‐axis so that it is always categorical, hide grid lines, dark‐navy ticks
+    # ─────────────────────────────────────────────────────────────────────────────
     fig.update_yaxes(
-        autorange="reversed",
-        title_text="",
-        tickfont=dict(color="#0B1D3A"),
-        title_font=dict(color="#0B1D3A")
-    )
-    # X‐axis (dates) dark‐navy
-    fig.update_xaxes(
-        title_text="Date",
-        tickfont=dict(color="#0B1D3A"),
-        title_font=dict(color="#0B1D3A")
+        autorange="reversed",        # show the top resource first
+        type="category",              # force category even if single resource
+        showgrid=False,               # turn off horizontal grid lines
+        tickfont=dict(color="#0B1D3A", size=12),
+        title_text=""                 # no Y‐axis title
     )
 
-    # Layout: dark‐navy title & labels, and WHITE chart background
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Tweak X‐axis: dark‐navy ticks, no grid lines or minimal grid
+    # ─────────────────────────────────────────────────────────────────────────────
+    fig.update_xaxes(
+        title_text="Date",
+        tickfont=dict(color="#0B1D3A", size=12),
+        title_font=dict(color="#0B1D3A", size=14),
+        showgrid=False                 # remove vertical grid lines
+    )
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Overall layout adjustments: white plot area, transparent “paper” background,
+    # dark‐navy title/legend, and a small margin so it’s never clipped
+    # ─────────────────────────────────────────────────────────────────────────────
     fig.update_layout(
-        height=max(400, len(proj.vessels) * 100 + len(proj.tasks) * 50),
-        plot_bgcolor="white",           # ← changed: chart plot area is now pure white
-        paper_bgcolor="rgba(0,0,0,0)",
-        font_color="#0B1D3A",
-        title_font=dict(color="#0B1D3A", size=20),
+        height=max(400, len(proj.vessels)*100 + len(proj.tasks)*50),
+        plot_bgcolor="white",         # pure white inside the chart
+        paper_bgcolor="rgba(0,0,0,0)", # transparent around the chart
+        font_color="#0B1D3A",          # dark‐navy for all text by default
+        title=dict(
+            text=f"Gantt Chart ► {proj.name}",
+            font=dict(color="#0B1D3A", size=20),
+            x=0.02                       # left‐align title slightly
+        ),
+        margin=dict(l=40, r=20, t=60, b=40),  # some breathing room
         legend_title_text="Activity Type",
-        legend_font=dict(color="#0B1D3A"),
+        legend=dict(font=dict(color="#0B1D3A", size=12)),
         hoverlabel=dict(
             bgcolor="rgba(30, 64, 175, 0.8)",
             font_size=12,
@@ -1106,4 +1122,5 @@ else:
         )
     )
 
+    # Finally render it
     st.plotly_chart(fig, use_container_width=True)
