@@ -12,18 +12,18 @@ from typing import List, Dict, Optional
 # ────────────────────────────────────────────────────────────────────────────────
 def init_session_state():
     if "projects" not in st.session_state:
-        st.session_state["projects"] = []  # List[Project]
+        st.session_state["projects"] = []  # Will hold Project objects
     if "current_project_id" not in st.session_state:
         st.session_state["current_project_id"] = None
     if "editing_vessel" not in st.session_state:
         st.session_state["editing_vessel"] = None  # vessel_id being edited
     if "editing_task" not in st.session_state:
-        st.session_state["editing_task"] = None  # task_id being edited
+        st.session_state["editing_task"] = None    # task_id being edited
 
 init_session_state()
 
 # ────────────────────────────────────────────────────────────────────────────────
-# CONSTANTS & COLOR MAP for the Gantt chart
+# CONSTANTS & COLOR MAP for Gantt chart
 # ────────────────────────────────────────────────────────────────────────────────
 DEFAULT_SURVEY_SPEED = 5.0  # knots
 
@@ -40,7 +40,7 @@ COLOR_MAP = {
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
-# CUSTOM CSS (injected once at the top)
+# INJECT CUSTOM CSS
 # ────────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Hydrographic Survey Estimator",
@@ -53,28 +53,24 @@ st.markdown(
     <link rel="stylesheet"
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        /* ─────────────────────────────────────────────────────────────────────────── */
-        /* 0. Force all st.info() text to white */
+        /* 0) st.info() text forced to white */
         .stInfo * {
             color: #FFFFFF !important;
         }
-
-        /* 1. Force all checkbox labels to white */
+        /* 1) Checkbox labels forced white */
         .stCheckbox, .stCheckbox * {
             color: #FFFFFF !important;
         }
-
-        /* 2. Overall Dark‐Navy Background & White Text */
+        /* 2) Dark‐navy background and white default text */
         html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
-            background: #0B1D3A;      /* very dark navy */
-            color: #FFFFFF;           /* white text */
+            background: #0B1D3A;
+            color: #FFFFFF;
             font-family: 'Arial', sans-serif;
         }
-
-        /* 3. Header Styling (white background + navy‐blue text) */
+        /* 3) Header (white background + navy text) */
         .stHeader {
             width: 100%;
-            background: #FFFFFF;        
+            background: #FFFFFF;
             padding: 25px 40px;
             margin-bottom: 20px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -83,12 +79,11 @@ st.markdown(
         .stHeader h1 {
             margin: 0;
             font-size: 2.5rem;
-            color: #0B1D3A;             /* navy‐blue text */
+            color: #0B1D3A;
             text-align: center;
             font-weight: 600;
         }
-
-        /* 4. Project Selector Styling (selectbox labels + box) */
+        /* 4) Project selectbox styling */
         .project-selectbox > label {
             color: #FFFFFF !important;
             font-size: 1rem;
@@ -102,8 +97,7 @@ st.markdown(
             padding: 8px !important;
             width: 100% !important;
         }
-
-        /* 5. Section Titles */
+        /* 5) Section headers */
         .section-header {
             font-size: 1.3rem;
             font-weight: 600;
@@ -113,20 +107,19 @@ st.markdown(
             border-left: 4px solid #1D4ED8;
             padding-left: 10px;
         }
-
-        /* 6. Input Fields: White Labels, Light‐Gray Boxes */
-        .stTextInput > label,
-        .stNumberInput > label,
-        .stDateInput > label,
+        /* 6) Input field labels & boxes */
+        .stTextInput > label, 
+        .stNumberInput > label, 
+        .stDateInput > label, 
         .stSelectbox > label {
             color: #FFFFFF !important;
             font-size: 0.95rem;
             font-weight: 500;
             margin-bottom: 4px;
         }
-        .stTextInput input[type="text"],
-        .stNumberInput input[type="number"],
-        .stDateInput input[type="text"],
+        .stTextInput input[type="text"], 
+        .stNumberInput input[type="number"], 
+        .stDateInput input[type="text"], 
         .stSelectbox select {
             background: #F5F5F5 !important;
             color: #000000 !important;
@@ -135,25 +128,22 @@ st.markdown(
             padding: 8px !important;
             width: 100% !important;
         }
-
-        /* 7. Button Styling */
-        /*   a) “Add Vessel” / “Add Task” (inside .add-form-button container) */
+        /* 7a) “Add Vessel”/“Add Task” containers—button text dark‐navy */
         .add-form-button .stButton > button {
-            background: #FFFFFF !important;  
-            color: #0B1D3A !important;        /* dark‐navy text */
-            border: 1px solid #0B1D3A !important;  /* dark‐navy border */
+            background: #FFFFFF !important;
+            color: #0B1D3A !important;
+            border: 1px solid #0B1D3A !important;
             font-weight: 600 !important;
             padding: 12px 24px !important;
             border-radius: 6px !important;
             transition: transform 0.2s, border-color 0.2s;
         }
         .add-form-button .stButton > button:hover {
-            border: 1px solid #DB504A !important;  /* red border on hover */
+            border: 1px solid #DB504A !important;
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
-
-        /*   b) All other standard buttons (Create, Clear, Export/Import, Edit, Delete) */
+        /* 7b) All other standard buttons (Create/Update/Clear/Export/Import/Edit/Delete) */
         .stButton > button {
             background: linear-gradient(135deg, #1E40AF, #3B82F6) !important;
             color: #FFFFFF !important;
@@ -167,8 +157,7 @@ st.markdown(
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
-
-        /* 8. Cards for Vessels/Tasks */
+        /* 8) Cards (Vessels & Tasks) */
         .card {
             background: rgba(255,255,255,0.1);
             border-radius: 8px;
@@ -184,8 +173,7 @@ st.markdown(
             color: #E0E0E0;
             margin: 2px 0;
         }
-
-        /* 9. Expander Styling */
+        /* 9) Expander styling */
         .stExpander > button {
             background: rgba(255,255,255,0.1) !important;
             border: none;
@@ -204,13 +192,12 @@ st.markdown(
             color: #FFFFFF !important;
             font-weight: 500 !important;
         }
-
-        /* 10. Plotly Timeline Legend & Text Contrast */
+        /* 10) Plotly Timeline: legend & text contrast */
         .js-plotly-plot .legendtext {
-            fill: #FFFFFF !important;
+            fill: #0B1D3A !important;  /* dark‐navy legend text */
         }
         .js-plotly-plot .traces text {
-            fill: #FFFFFF !important;
+            fill: #0B1D3A !important;  /* dark‐navy data labels */
         }
     </style>
     """,
@@ -284,6 +271,7 @@ class Vessel:
         )
         return v
 
+
 class Task:
     def __init__(
         self,
@@ -327,6 +315,7 @@ class Task:
         )
         return t
 
+
 class Project:
     def __init__(
         self,
@@ -364,8 +353,9 @@ class Project:
         p.tasks = [Task.from_dict(t) for t in d.get("tasks", [])]
         return p
 
+
 # ────────────────────────────────────────────────────────────────────────────────
-# HELPER: get_current_project()
+# HELPER: Get the currently selected Project object (or None)
 # ────────────────────────────────────────────────────────────────────────────────
 def get_current_project() -> Optional[Project]:
     pid = st.session_state.get("current_project_id")
@@ -375,6 +365,7 @@ def get_current_project() -> Optional[Project]:
         if p.id == pid:
             return p
     return None
+
 
 # ────────────────────────────────────────────────────────────────────────────────
 # SECTION 1) PROJECT CREATION / SELECTION
@@ -408,17 +399,30 @@ with col1:
 with col2:
     if sel == "➕ New Project":
         new_name = st.text_input("New Project Name", value="", placeholder="e.g. Gulf Survey 2025")
-        new_line_km = st.number_input("Total Line Km to Survey", min_value=0.0, step=1.0, value=0.0)
-        new_infill = st.number_input("Infill %", min_value=0.0, max_value=100.0, step=1.0, value=0.0)
+        new_line_km_text = st.text_input("Total Line Km to Survey", value="0.00", placeholder="0.00")
+        new_infill_text = st.text_input("Infill %", value="0.00", placeholder="0.00")
         if st.button("Create Project", key="create_project"):
+            # Convert text inputs to floats (with error checks)
+            try:
+                new_line_km = float(new_line_km_text)
+                new_infill = float(new_infill_text)
+            except ValueError:
+                st.error("Line Km and Infill % must be valid numbers.")
+                new_line_km = None
+                new_infill = None
+
             if not new_name.strip():
                 st.error("Project name cannot be empty.")
+            elif new_line_km is None or new_line_km < 0:
+                st.error("Total Line Km to Survey must be ≥ 0.")
+            elif new_infill is None or not (0 <= new_infill <= 100):
+                st.error("Infill % must be between 0 and 100.")
             else:
                 proj = Project(name=new_name.strip(), total_line_km=new_line_km, infill_pct=new_infill)
                 st.session_state["projects"].append(proj)
                 st.session_state["current_project_id"] = proj.id
     else:
-        # User selected an existing project
+        # User selected an existing project; store its ID
         chosen = sel
         for p in st.session_state.get("projects", []):
             if p.name == chosen:
@@ -453,18 +457,12 @@ with st.expander("🚢 Add New Vessel", expanded=False):
         colA, colB, colC = st.columns([3, 2, 1])
         with colA:
             vessel_name = st.text_input("Vessel Name*", placeholder="e.g. Orca Explorer")
-            vessel_km = st.number_input("Line Km for this Vessel*", min_value=0.1, step=1.0, value=0.1)
+            vessel_km_text = st.text_input("Line Km for this Vessel*", value="0.00", placeholder="0.00")
             start_date = st.date_input("Start Date*", value=datetime.date.today())
         with colB:
-            transit_val = st.number_input(
-                "Transit Duration*", min_value=0.0, step=0.5, value=0.0, key="transit_val"
-            )
-            weather_val = st.number_input(
-                "Weather Downtime*", min_value=0.0, step=0.5, value=0.0, key="weather_val"
-            )
-            maintenance_val = st.number_input(
-                "Maintenance*", min_value=0.0, step=0.5, value=0.0, key="maintenance_val"
-            )
+            transit_text = st.text_input("Transit Duration*", value="0.00", placeholder="0.00")
+            weather_text = st.text_input("Weather Downtime*", value="0.00", placeholder="0.00")
+            maintenance_text = st.text_input("Maintenance*", value="0.00", placeholder="0.00")
         with colC:
             transit_unit = st.selectbox("Unit", ["days", "hours"], index=0, key="transit_unit")
             weather_unit = st.selectbox("", ["days", "hours"], index=0, key="weather_unit")
@@ -472,31 +470,48 @@ with st.expander("🚢 Add New Vessel", expanded=False):
 
         submitted = st.form_submit_button("Add Vessel")
         if submitted:
+            # Convert the three “duration” text fields to floats
+            try:
+                vkm = float(vessel_km_text)
+                tr = float(transit_text)
+                wt = float(weather_text)
+                mt = float(maintenance_text)
+            except ValueError:
+                st.error("Line Km, Transit, Weather, and Maintenance must all be valid numbers.")
+                vkm = tr = wt = mt = None
+
             errs = []
             if not vessel_name.strip():
                 errs.append("Vessel name cannot be empty.")
-            if vessel_km <= 0:
-                errs.append("Line Km must be positive.")
+            if vkm is None or vkm <= 0:
+                errs.append("Line Km must be a positive number.")
+            if tr is None or tr < 0:
+                errs.append("Transit Duration must be ≥ 0.")
+            if wt is None or wt < 0:
+                errs.append("Weather Downtime must be ≥ 0.")
+            if mt is None or mt < 0:
+                errs.append("Maintenance must be ≥ 0.")
+
             if errs:
                 for e in errs:
                     st.error(e)
             else:
                 new_v = Vessel(
                     name=vessel_name.strip(),
-                    vessel_km=vessel_km,
+                    vessel_km=vkm,
                     start_date=start_date,
-                    transit=transit_val,
+                    transit=tr,
                     transit_unit=transit_unit,
-                    weather=weather_val,
+                    weather=wt,
                     weather_unit=weather_unit,
-                    maintenance=maintenance_val,
+                    maintenance=mt,
                     maintenance_unit=maintenance_unit
                 )
                 current_project.vessels.append(new_v)
                 st.success(f"Vessel '{vessel_name.strip()}' added!")
     st.markdown('</div>', unsafe_allow_html=True)
 
-# — Display Existing Vessels, plus Edit/Delete buttons
+# — Display Existing Vessels, with Edit/Delete
 for v in current_project.vessels:
     with st.container():
         c1, c2, c3 = st.columns([3, 1, 1])
@@ -522,6 +537,7 @@ for v in current_project.vessels:
         with c3:
             if st.button("🗑️ Delete", key=f"del_v_{v.id}"):
                 current_project.vessels = [x for x in current_project.vessels if x.id != v.id]
+                # Also remove any tasks that were assigned to this vessel
                 current_project.tasks = [t for t in current_project.tasks if t.vessel_id != v.id]
                 st.success(f"Deleted vessel '{v.name}'.")
 
@@ -536,33 +552,23 @@ if st.session_state.get("editing_vessel"):
                 eA, eB, eC = st.columns([3, 2, 1])
                 with eA:
                     new_name = st.text_input("Vessel Name*", value=to_edit.name)
-                    new_km = st.number_input(
-                        "Line Km*", min_value=0.1, step=1.0, value=to_edit.vessel_km
-                    )
-                    new_start = st.date_input(
-                        "Start Date*", value=pd.to_datetime(to_edit.start_date).date()
-                    )
+                    new_km_text = st.text_input("Line Km*", value=str(to_edit.vessel_km))
+                    new_start = st.date_input("Start Date*", value=to_edit.start_date)
                 with eB:
-                    new_transit = st.number_input(
+                    new_transit_text = st.text_input(
                         "Transit Duration*",
-                        min_value=0.0,
-                        step=0.5,
-                        value=to_edit.transit_days,
-                        key=f"et_{to_edit.id}_transit"
+                        value=str(to_edit.transit_days),
+                        key=f"et_{to_edit.id}_transit_text"
                     )
-                    new_weather = st.number_input(
+                    new_weather_text = st.text_input(
                         "Weather Downtime*",
-                        min_value=0.0,
-                        step=0.5,
-                        value=to_edit.weather_days,
-                        key=f"ew_{to_edit.id}_weather"
+                        value=str(to_edit.weather_days),
+                        key=f"ew_{to_edit.id}_weather_text"
                     )
-                    new_maint = st.number_input(
+                    new_maint_text = st.text_input(
                         "Maintenance*",
-                        min_value=0.0,
-                        step=0.5,
-                        value=to_edit.maintenance_days,
-                        key=f"em_{to_edit.id}_maint"
+                        value=str(to_edit.maintenance_days),
+                        key=f"em_{to_edit.id}_maint_text"
                     )
                 with eC:
                     new_transit_unit = st.selectbox(
@@ -577,27 +583,45 @@ if st.session_state.get("editing_vessel"):
 
                 update_button = st.form_submit_button("Update Vessel")
                 if update_button:
+                    # Convert the text inputs to floats
+                    try:
+                        nkm = float(new_km_text)
+                        ntr = float(new_transit_text)
+                        nwt = float(new_weather_text)
+                        nmt = float(new_maint_text)
+                    except ValueError:
+                        st.error("Line Km, Transit, Weather, and Maintenance must be valid numbers.")
+                        nkm = ntr = nwt = nmt = None
+
                     errs = []
                     if not new_name.strip():
                         errs.append("Vessel name cannot be empty.")
-                    if new_km <= 0:
-                        errs.append("Line Km must be positive.")
+                    if nkm is None or nkm <= 0:
+                        errs.append("Line Km must be a positive number.")
+                    if ntr is None or ntr < 0:
+                        errs.append("Transit Duration must be ≥ 0.")
+                    if nwt is None or nwt < 0:
+                        errs.append("Weather Downtime must be ≥ 0.")
+                    if nmt is None or nmt < 0:
+                        errs.append("Maintenance must be ≥ 0.")
+
                     if errs:
                         for e in errs:
                             st.error(e)
                     else:
                         updated_v = Vessel(
                             name=new_name.strip(),
-                            vessel_km=new_km,
+                            vessel_km=nkm,
                             start_date=new_start,
-                            transit=new_transit,
+                            transit=ntr,
                             transit_unit=new_transit_unit,
-                            weather=new_weather,
+                            weather=nwt,
                             weather_unit=new_weather_unit,
-                            maintenance=new_maint,
+                            maintenance=nmt,
                             maintenance_unit=new_maint_unit,
                             id=to_edit.id
                         )
+                        # Replace the old vessel object with the updated one:
                         current_project.vessels = [
                             x for x in current_project.vessels if x.id != to_edit.id
                         ] + [updated_v]
@@ -618,7 +642,7 @@ with st.expander("📝 Add New Task", expanded=False):
     with st.form("task_form"):
         t1, t2 = st.columns(2)
         with t1:
-            task_name = st.text_input("Task Name*", placeholder="e.g. Sediment Sampling")
+            task_name = st.text_input("Task Name*", placeholder="e.g. Sediment Sampling", key="new_task_name")
             task_type = st.selectbox(
                 "Task Type*",
                 options=[
@@ -628,31 +652,35 @@ with st.expander("📝 Add New Task", expanded=False):
                 index=0,
                 key="new_task_type"
             )
-            if task_type == "Other":
-                other_label = st.text_input("Specify “Other” Task Type*", placeholder="Enter custom task type here")
+            # Auto‐populate task_name if not "Other"
+            if task_type != "Other":
+                st.session_state["new_task_name"] = task_type
+            else:
+                # If "Other", the user must type a custom name:
+                other_label = st.text_input("Specify “Other” Task Type*", placeholder="Enter custom task type here", key="new_task_other")
+
         with t2:
-            start_date_t = st.date_input("Start Date*")
-            end_date_t = st.date_input("End Date*", value=datetime.date.today() + datetime.timedelta(days=1))
-            vessel_options = [("Unassigned", None)] + [
-                (v.name, v.id) for v in current_project.vessels
-            ]
+            start_date_t = st.date_input("Start Date*", key="new_task_start")
+            end_date_t = st.date_input("End Date*", value=datetime.date.today() + datetime.timedelta(days=1), key="new_task_end")
+            vessel_options = [("Unassigned", None)] + [(v.name, v.id) for v in current_project.vessels]
             sel_vessel = st.selectbox(
                 "Assign to Vessel",
                 options=vessel_options,
-                format_func=lambda x: x[0]
+                format_func=lambda x: x[0],
+                key="new_task_vessel"
             )
-            pause_survey = st.checkbox("Pause Survey Operations", value=False)
+            pause_survey = st.checkbox("Pause Survey Operations", value=False, key="new_task_pause")
 
         add_task_btn = st.form_submit_button("Add Task")
         if add_task_btn:
+            chosen_type = task_type if task_type != "Other" else st.session_state.get("new_task_other", "").strip()
             errs = []
             if not task_name.strip():
                 errs.append("Task name cannot be empty.")
             if start_date_t > end_date_t:
                 errs.append("End date must be on or after start date.")
-            chosen_type = task_type if task_type != "Other" else other_label.strip()
             if task_type == "Other" and not chosen_type:
-                errs.append("You selected “Other”. Please specify the task type.")
+                errs.append("You selected “Other,” but did not specify a name.")
             if errs:
                 for e in errs:
                     st.error(e)
@@ -696,7 +724,7 @@ for t in current_project.tasks:
                 current_project.tasks = [x for x in current_project.tasks if x.id != t.id]
                 st.success(f"Deleted task '{t.name}'.")
 
-# — If a task is being edited, show a full-width expander for editing
+# — If a task is being edited, show a full‐width expander for editing
 if st.session_state.get("editing_task"):
     edit_tid = st.session_state["editing_task"]
     to_edit_t = next((x for x in current_project.tasks if x.id == edit_tid), None)
@@ -706,7 +734,7 @@ if st.session_state.get("editing_task"):
             with st.form(f"task_edit_form_{to_edit_t.id}"):
                 et1, et2 = st.columns(2)
                 with et1:
-                    new_name = st.text_input("Task Name*", value=to_edit_t.name)
+                    new_name = st.text_input("Task Name*", value=to_edit_t.name, key=f"_edit_name_{to_edit_t.id}")
                     new_type = st.selectbox(
                         "Task Type*",
                         options=[
@@ -722,22 +750,28 @@ if st.session_state.get("editing_task"):
                                 "Sediment Sample","Deployment","Recovery"
                             ] else 8
                         ),
-                        key=f"et_ttype_{to_edit_t.id}"
+                        key=f"_edit_type_{to_edit_t.id}"
                     )
-                    if new_type == "Other":
+                    # If type changes and is not “Other,” fill name box automatically:
+                    if new_type != "Other":
+                        st.session_state[f"_edit_name_{to_edit_t.id}"] = new_type
+                    else:
                         new_other = st.text_input(
                             "Specify “Other” Type*",
                             value=(
                                 to_edit_t.task_type
-                                if to_edit_t.task_type not in [
+                                if to_edit_t.task_type
+                                not in [
                                     "Survey","Maintenance","Weather","Transit","Delay",
                                     "Sediment Sample","Deployment","Recovery"
-                                ] else ""
-                            )
+                                ]
+                                else ""
+                            ),
+                            key=f"_edit_other_{to_edit_t.id}"
                         )
                 with et2:
-                    new_start = st.date_input("Start Date*", value=to_edit_t.start_date, key=f"et_start_{to_edit_t.id}")
-                    new_end = st.date_input("End Date*", value=to_edit_t.end_date, key=f"et_end_{to_edit_t.id}")
+                    new_start = st.date_input("Start Date*", value=to_edit_t.start_date, key=f"_edit_start_{to_edit_t.id}")
+                    new_end = st.date_input("End Date*", value=to_edit_t.end_date, key=f"_edit_end_{to_edit_t.id}")
                     vessel_options_edit = [("Unassigned", None)] + [
                         (v.name, v.id) for v in current_project.vessels
                     ]
@@ -751,24 +785,25 @@ if st.session_state.get("editing_task"):
                         options=vessel_options_edit,
                         index=default_idx,
                         format_func=lambda x: x[0],
-                        key=f"et_vessel_{to_edit_t.id}"
+                        key=f"_edit_vessel_{to_edit_t.id}"
                     )
                     new_pause = st.checkbox(
                         "Pause Survey Operations",
                         value=to_edit_t.pause_survey,
-                        key=f"et_pause_{to_edit_t.id}"
+                        key=f"_edit_pause_{to_edit_t.id}"
                     )
 
                 update_task_btn = st.form_submit_button("Update Task")
                 if update_task_btn:
+                    chosen_t = new_type if new_type != "Other" else st.session_state.get(f"_edit_other_{to_edit_t.id}", "").strip()
                     errs = []
                     if not new_name.strip():
                         errs.append("Task name cannot be empty.")
                     if new_start > new_end:
                         errs.append("End date must be on or after start date.")
-                    chosen_t = new_type if new_type != "Other" else new_other.strip()
                     if new_type == "Other" and not chosen_t:
-                        errs.append("You selected “Other”. Please specify the task type.")
+                        errs.append("You selected “Other.” Please specify the task type.")
+
                     if errs:
                         for e in errs:
                             st.error(e)
@@ -824,7 +859,8 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                         "total_line_km": p.total_line_km,
                         "infill_pct": p.infill_pct
                     })
-                pd.DataFrame(proj_rows).to_excel(writer, sheet_name="Projects", index=False)
+                if proj_rows:
+                    pd.DataFrame(proj_rows).to_excel(writer, sheet_name="Projects", index=False)
 
                 vessel_rows = []
                 for p in st.session_state.get("projects", []):
@@ -934,7 +970,7 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                 st.error(f"Error importing: {e}")
 
 # ────────────────────────────────────────────────────────────────────────────────
-# SECTION 5) GANTT CHART FOR CURRENT PROJECT
+# SECTION 5) PROJECT TIMELINE (GANTT CHART)
 # ────────────────────────────────────────────────────────────────────────────────
 st.markdown('<div class="section-header">5) Project Timeline (Gantt Chart)</div>', unsafe_allow_html=True)
 
@@ -948,7 +984,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
         survey_start = pd.to_datetime(v.start_date)
         survey_end = pd.to_datetime(v.end_date)
 
-        # gather pause tasks for this vessel
+        # Gather any “pause” tasks for this vessel
         pauses = sorted(
             [t for t in tasks if (t.vessel_id == v.id and t.pause_survey)],
             key=lambda t: pd.to_datetime(t.start_date)
@@ -974,6 +1010,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                 "Type": t.task_type
             })
             cur_start = t_end
+
         if cur_start < survey_end:
             rows.append({
                 "Task": f"Survey ► {v.name}",
@@ -983,7 +1020,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                 "Type": "Survey"
             })
 
-    # unassigned tasks
+    # Unassigned tasks appear on their own “Unassigned” row
     for t in tasks:
         if t.vessel_id is None:
             rows.append({
@@ -1015,29 +1052,29 @@ else:
         title=f"Gantt Chart ► {proj.name}"
     )
 
-    # Y-axis reversed, white ticks
+    # Y‐axis reversed; tick labels in dark‐navy
     fig.update_yaxes(
         autorange="reversed",
         title_text="",
-        tickfont=dict(color="white"),
-        title_font=dict(color="white")
+        tickfont=dict(color="#0B1D3A"),
+        title_font=dict(color="#0B1D3A")
     )
-    # X-axis (dates) with white ticks
+    # X‐axis (dates) with dark‐navy ticks
     fig.update_xaxes(
         title_text="Date",
-        tickfont=dict(color="white"),
-        title_font=dict(color="white")
+        tickfont=dict(color="#0B1D3A"),
+        title_font=dict(color="#0B1D3A")
     )
 
-    # Legend & Title styling
+    # Layout: set chart title to dark‐navy as well
     fig.update_layout(
         height=max(400, len(proj.vessels) * 100 + len(proj.tasks) * 50),
         plot_bgcolor="rgba(255,255,255,0.1)",
         paper_bgcolor="rgba(0,0,0,0)",
-        font_color="white",                           # default font
-        title_font=dict(color="white", size=20),      # chart title in white
+        font_color="#0B1D3A",                        # default font color to dark‐navy
+        title_font=dict(color="#0B1D3A", size=20),   # chart title in dark‐navy
         legend_title_text="Activity Type",
-        legend_font=dict(color="white"),               # legend labels in white
+        legend_font=dict(color="#0B1D3A"),
         hoverlabel=dict(
             bgcolor="rgba(30, 64, 175, 0.8)",
             font_size=12,
