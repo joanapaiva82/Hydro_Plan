@@ -1179,19 +1179,15 @@ else:
         gridcolor="rgba(0,0,0,0)"
     )
 
-    # X‐axis: enforce type='date', show ticks in “MMM DD, YYYY” format, force at least one month tick
+    # X‐axis: enforce type='date', show ticks in “MMM DD, YYYY” format
     fig.update_xaxes(
         type="date",
         tickformat="%b %d, %Y",
-        tickangle=-45,
-        showgrid=True,
-        gridcolor="rgba(200,200,200,0.2)",
-        ticks="outside",
         tickfont=dict(color="#0B1D3A", size=14, family="Arial"),
         title_text="Date",
         title_font=dict(color="#0B1D3A", size=16, family="Arial"),
-        rangemode="normal",
-        dtick="M1"  # ← Force one‐month increment so ticks always appear
+        showgrid=True,
+        gridcolor="rgba(200,200,200,0.2)"
     )
 
     # Finally render it full‐width
