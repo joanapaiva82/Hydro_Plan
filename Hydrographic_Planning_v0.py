@@ -43,10 +43,11 @@ COLOR_MAP = {
 # ────────────────────────────────────────────────────────────────────────────────
 # CUSTOM CSS FOR:
 #   • FORCE st.info(...) TEXT TO WHITE
-#   • WHITE HEADER with NAVY text on DARK NAVY background
+#   • FORCE CHECKBOX LABELS TO WHITE
+#   • WHITE HEADER BOX with NAVY text on DARK NAVY background
 #   • WHITE checkbox labels
-#   • BLACK text for “Add Vessel” / “Add Task” buttons
-#   • ALL other buttons (Create, Clear, Export, Edit, Delete) are white‐text on blue‐gradient
+#   • BUTTONS: “Add Vessel” / “Add Task” in dark‐navy text on white background
+#   • ALL other buttons (Create, Clear, Export/Import, Edit, Delete) in white‐text on blue‐gradient
 # ────────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Hydrographic Survey Estimator",
@@ -63,14 +64,19 @@ st.markdown(
             color: #FFFFFF !important;
         }
 
-        /* 1. Overall Dark-Navy Background & White Text */
+        /* 1. Force all checkbox labels to white */
+        .stCheckbox, .stCheckbox * {
+            color: #FFFFFF !important;
+        }
+
+        /* 2. Overall Dark-Navy Background & White Text */
         html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
             background: #0B1D3A;      /* very dark navy */
             color: #FFFFFF;           /* white text */
             font-family: 'Arial', sans-serif;
         }
 
-        /* 2. Header Styling (white background + navy-blue text) */
+        /* 3. Header Styling (white background + navy-blue text) */
         .stHeader {
             width: 100%;
             background: #FFFFFF;            /* white box */
@@ -87,7 +93,7 @@ st.markdown(
             font-weight: 600;
         }
 
-        /* 3. Project Selector Styling (wrap selectbox in .project-selectbox) */
+        /* 4. Project Selector Styling (wrap selectbox in .project-selectbox) */
         .project-selectbox > label {
             color: #FFFFFF !important;
             font-size: 1rem;
@@ -102,7 +108,7 @@ st.markdown(
             width: 100% !important;
         }
 
-        /* 4. Section Titles */
+        /* 5. Section Titles */
         .section-header {
             font-size: 1.3rem;
             font-weight: 600;
@@ -113,7 +119,7 @@ st.markdown(
             padding-left: 10px;
         }
 
-        /* 5. Input Fields: White Labels, Light-Gray Boxes */
+        /* 6. Input Fields: White Labels, Light-Gray Boxes */
         .stTextInput > label, .stNumberInput > label, .stDateInput > label, .stSelectbox > label {
             color: #FFFFFF !important;
             font-size: 0.95rem;
@@ -132,17 +138,12 @@ st.markdown(
             width: 100% !important;
         }
 
-        /* 6. Checkbox Label Color (e.g. “Pause Survey Operations”) */
-        .stCheckbox > label {
-            color: #FFFFFF !important;   /* force checkbox labels to white */
-        }
-
         /* 7. Button Styling */
-        /*    a) Form “Add Vessel” / “Add Task”: black text on white background */
+        /*    a) Form “Add Vessel” / “Add Task”: dark-navy text on white background */
         .add-form-button .stButton > button {
-            background: #FFFFFF !important;  /* white button */
-            color: #000000 !important;       /* black text */
-            border: 1px solid #DB504A !important;  /* subtle red border */
+            background: #FFFFFF !important;  
+            color: #0B1D3A !important;       /* dark‐navy text */
+            border: 1px solid #DB504A !important;
             font-weight: 600;
             padding: 12px 24px !important;
             border-radius: 6px !important;
@@ -152,7 +153,7 @@ st.markdown(
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
-        /*    b) All other standard buttons (e.g. “Create Project”, “Clear Project”, “Export to JSON”): white text on gradient */
+        /*    b) All other standard buttons (e.g. “Create Project”, “Clear Project”, “Export / Import”): white text on gradient */
         .stButton > button {
             background: linear-gradient(135deg, #1E40AF, #3B82F6) !important;
             color: #FFFFFF !important;
@@ -445,13 +446,12 @@ st.markdown(
 )
 
 with st.expander("🚢 Add New Vessel", expanded=False):
-    # Wrap in .add-form-button so “Add Vessel” uses black text on white background
+    # Wrap in .add-form-button so “Add Vessel” uses dark-navy text on white background
     st.markdown('<div class="add-form-button">', unsafe_allow_html=True)
     with st.form("vessel_form"):
         vcol1, vcol2 = st.columns([3, 2])
         with vcol1:
             vessel_name = st.text_input("Vessel Name*", placeholder="e.g. Orca Explorer")
-            # Default must be ≥ min_value, so use 0.1
             vessel_km = st.number_input("Line Km for this Vessel*", min_value=0.1, step=1.0, value=0.1)
             start_date = st.date_input("Start Date*", value=datetime.date.today())
         with vcol2:
@@ -521,22 +521,14 @@ if current_project.vessels:
                                 new_km = st.number_input("Line Km*", min_value=0.1, step=1.0, value=v.vessel_km)
                                 new_start = st.date_input("Start Date*", value=pd.to_datetime(v.start_date).date())
                             with ev2:
-                                # Convert stored days back into input values
-                                new_transit = v.transit_days
-                                new_transit_unit = "days"
-                                new_weather = v.weather_days
-                                new_weather_unit = "days"
-                                new_maint = v.maintenance_days
-                                new_maint_unit = "days"
-
+                                # Prepopulate days (since stored as days)
                                 new_transit = st.number_input(
                                     "Transit Duration*", min_value=0.0, step=0.5,
-                                    value=new_transit, key=f"et_{v.id}_transit"
+                                    value=v.transit_days, key=f"et_{v.id}_transit"
                                 )
                                 new_transit_unit = st.selectbox(
                                     "Unit", ["days", "hours"], index=0, key=f"et_{v.id}_tunit"
                                 )
-
                                 new_weather = st.number_input(
                                     "Weather Downtime*", min_value=0.0, step=0.5,
                                     value=v.weather_days, key=f"ew_{v.id}_weather"
@@ -544,7 +536,6 @@ if current_project.vessels:
                                 new_weather_unit = st.selectbox(
                                     "Unit", ["days", "hours"], index=0, key=f"ew_{v.id}_wunit"
                                 )
-
                                 new_maint = st.number_input(
                                     "Maintenance*", min_value=0.0, step=0.5,
                                     value=v.maintenance_days, key=f"em_{v.id}_maint"
@@ -595,7 +586,7 @@ if current_project.vessels:
                     st.success(f"Deleted vessel '{v.name}'.")
                     safe_rerun()
 else:
-    # “No vessels added…” message forced white by the CSS rule above
+    # White “No vessels added” via CSS override on st.info
     st.info("No vessels added yet to this project.")
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -778,7 +769,7 @@ if current_project.tasks:
                     st.success(f"Deleted task '{t.name}'.")
                     safe_rerun()
 else:
-    # “No tasks added…” message forced white by the CSS rule above
+    # White “No tasks added” via CSS override on st.info
     st.info("No tasks added yet to this project.")
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -1004,14 +995,14 @@ else:
     fig.update_yaxes(
         autorange="reversed",
         title_text="",
-        tickfont=dict(color="white"),      # resource labels in white
-        title_font=dict(color="white")      # y-axis title (if any)
+        tickfont=dict(color="white"),
+        title_font=dict(color="white")
     )
     # X-axis (dates) with white ticks/title
     fig.update_xaxes(
         title_text="Date",
-        tickfont=dict(color="white"),       # date ticks in white
-        title_font=dict(color="white")      # x-axis title in white
+        tickfont=dict(color="white"),
+        title_font=dict(color="white")
     )
 
     # Legend and Title styling
