@@ -25,7 +25,7 @@ init_session_state()
 # ────────────────────────────────────────────────────────────────────────────────
 # CONSTANTS & COLOR_MAP for Gantt
 # ────────────────────────────────────────────────────────────────────────────────
-DEFAULT_SURVEY_SPEED = 5.0  # knots
+DEFAULT_SURVEY_SPEED = 5.0  # knots (used to compute survey days)
 
 COLOR_MAP = {
     "Survey": "#2E86AB",
@@ -115,7 +115,7 @@ st.markdown(
             width: 100% !important;
         }
         /* 6a) “Add Vessel” & “Add Task” buttons: dark-navy text on white box */
-        .add-form-button .stButton > button {
+        .add-form-button button {
             background: #FFFFFF !important;
             color: #0B1D3A !important;
             border: 1px solid #0B1D3A !important;
@@ -124,12 +124,12 @@ st.markdown(
             border-radius: 6px !important;
             transition: transform 0.2s, border-color 0.2s;
         }
-        .add-form-button .stButton > button:hover {
+        .add-form-button button:hover {
             border: 1px solid #DB504A !important;
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
-        /* 6b) All other standard buttons */
+        /* 6b) All other standard buttons (blue gradient / white) */
         .stButton > button {
             background: linear-gradient(135deg, #1E40AF, #3B82F6) !important;
             color: #FFFFFF !important;
@@ -178,7 +178,7 @@ st.markdown(
             color: #FFFFFF !important;
             font-weight: 500 !important;
         }
-        /* 9) Gantt chart: legend, axis & text dark-navy */
+        /* 9) Gantt chart: legend, axis & text styling */
         .js-plotly-plot .legend text {
             fill: #0B1D3A !important;
         }
@@ -189,7 +189,7 @@ st.markdown(
             fill: #0B1D3A !important;
         }
         .js-plotly-plot .plotly .text {
-            fill: #FFFFFF !important; /* white text inside bars */
+            fill: #FFFFFF !important;  /* white text inside bars */
             font-size: 12px !important;
         }
     </style>
@@ -216,7 +216,7 @@ class Vessel:
     ):
         self.id = id or str(uuid4())
         self.name = name
-        self.vessel_km = vessel_km
+        self.vessel_km = vessel_km              # total line-km to survey
         self.start_date = start_date
 
         # Convert hours→days if needed
