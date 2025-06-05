@@ -45,7 +45,7 @@ COLOR_MAP = {
 #   • WHITE HEADER with NAVY text on DARK NAVY background
 #   • WHITE checkbox labels
 #   • BLACK text for “Add Vessel” / “Add Task” buttons
-#   • ALL other buttons remain white‐text on gradient
+#   • ALL other buttons are white‐text on a blue‐gradient
 # ────────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Hydrographic Survey Estimator",
@@ -147,16 +147,16 @@ st.markdown(
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
         /*    b) All other standard buttons (e.g. “Create Project”, “Export to JSON”): white text on gradient */
-        .stButton > button.primary-action {
+        .stButton > button {
             background: linear-gradient(135deg, #1E40AF, #3B82F6) !important;
             color: #FFFFFF !important;
             border: none !important;
-            font-weight: 600;
+            font-weight: 600 !important;
             padding: 12px 24px !important;
             border-radius: 6px !important;
             transition: transform 0.2s;
         }
-        .stButton > button.primary-action:hover {
+        .stButton > button:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
@@ -402,7 +402,7 @@ with col2:
         new_name = st.text_input("New Project Name", value="", placeholder="e.g. Gulf Survey 2025")
         new_line_km = st.number_input("Total Line Km to Survey", min_value=0.0, step=1.0, value=0.0)
         new_infill = st.number_input("Infill %", min_value=0.0, max_value=100.0, step=1.0, value=0.0)
-        if st.button("Create Project", key="create_project", args=[], kwargs={}, type="primary-action"):
+        if st.button("Create Project", key="create_project"):
             if not new_name.strip():
                 st.error("Project name cannot be empty.")
             else:
@@ -420,7 +420,9 @@ with col2:
                     safe_rerun()
 
 with col3:
-    if st.button("🔄 Refresh Projects", key="refresh_projects"):
+    # “Clear Project” button clears the current_project_id
+    if st.button("Clear Project", key="clear_project"):
+        st.session_state["current_project_id"] = None
         safe_rerun()
 
 current_project = get_current_project()
@@ -437,8 +439,7 @@ st.markdown(
 )
 
 with st.expander("🚢 Add New Vessel", expanded=False):
-    # We wrap the form-button in a div with class "add-form-button" so the
-    # CSS rule for black‐text button applies only to these “Add Vessel” & “Add Task” buttons.
+    # Wrap in .add-form-button so “Add Vessel” uses black text on white background
     st.markdown('<div class="add-form-button">', unsafe_allow_html=True)
     with st.form("vessel_form"):
         vcol1, vcol2 = st.columns([3, 2])
@@ -455,7 +456,7 @@ with st.expander("🚢 Add New Vessel", expanded=False):
             maintenance_val = st.number_input("Maintenance*", min_value=0.0, step=0.5, value=0.0, key="maintenance_val")
             maintenance_unit = st.selectbox("Unit", ["days", "hours"], index=0, key="maintenance_unit")
 
-        submitted = st.form_submit_button("Add Vessel", use_container_width=False)
+        submitted = st.form_submit_button("Add Vessel")
         if submitted:
             errors = []
             if not vessel_name.strip():
@@ -483,6 +484,7 @@ with st.expander("🚢 Add New Vessel", expanded=False):
 
     st.markdown('</div>', unsafe_allow_html=True)
 
+# Show existing vessels (if any)
 if current_project.vessels:
     for v in current_project.vessels:
         with st.container():
@@ -545,7 +547,7 @@ if current_project.vessels:
                                     "Unit", ["days", "hours"], index=0, key=f"em_{v.id}_munit"
                                 )
 
-                            updated_button = st.form_submit_button("Update Vessel", use_container_width=False)
+                            updated_button = st.form_submit_button("Update Vessel")
                             if updated_button:
                                 errs = []
                                 if not new_name.strip():
@@ -598,7 +600,6 @@ st.markdown(
 )
 
 with st.expander("📝 Add New Task", expanded=False):
-    # Wrap in .add-form-button so “Add Task” uses black text on white background
     st.markdown('<div class="add-form-button">', unsafe_allow_html=True)
     with st.form("task_form"):
         tcol1, tcol2 = st.columns(2)
@@ -628,7 +629,7 @@ with st.expander("📝 Add New Task", expanded=False):
             )
             pause_survey = st.checkbox("Pause Survey Operations", value=False)
 
-        add_task_btn = st.form_submit_button("Add Task", use_container_width=False)
+        add_task_btn = st.form_submit_button("Add Task")
         if add_task_btn:
             errors = []
             if not task_name.strip():
@@ -732,7 +733,7 @@ if current_project.tasks:
                                 )
                                 new_pause = st.checkbox("Pause Survey Operations", value=t.pause_survey, key=f"et_pause_{t.id}")
 
-                            update_task_btn = st.form_submit_button("Update Task", use_container_width=False)
+                            update_task_btn = st.form_submit_button("Update Task")
                             if update_task_btn:
                                 errs = []
                                 if not new_name.strip():
@@ -782,10 +783,8 @@ with st.expander("💾 Export / Import Projects", expanded=False):
     with ex_col1:
         st.markdown("**Export All Projects**")
         export_filename = st.text_input("Filename (no extension)", value="hydro_projects_export", key="export_name")
-        if st.button("Export to JSON", key="export_json", args=[], kwargs={}, type="primary-action"):
-            data_out = {
-                "projects": [p.to_dict() for p in st.session_state.get("projects", [])]
-            }
+        if st.button("Export to JSON", key="export_json"):
+            data_out = { "projects": [p.to_dict() for p in st.session_state.get("projects", [])] }
             raw = json.dumps(data_out, indent=2)
             st.download_button(
                 label="Download JSON",
@@ -793,7 +792,7 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                 file_name=f"{export_filename}.json",
                 mime="application/json"
             )
-        if st.button("Export to Excel", key="export_excel", args=[], kwargs={}, type="primary-action"):
+        if st.button("Export to Excel", key="export_excel"):
             output = BytesIO()
             with pd.ExcelWriter(output, engine="openpyxl") as writer:
                 proj_rows = []
@@ -838,7 +837,7 @@ with st.expander("💾 Export / Import Projects", expanded=False):
             type=["json", "xlsx"],
             accept_multiple_files=False
         )
-        if uploaded_file is not None and st.button("Import Data", key="import_data", args=[], kwargs={}, type="primary-action"):
+        if uploaded_file is not None and st.button("Import Data", key="import_data"):
             try:
                 if uploaded_file.name.lower().endswith(".json"):
                     raw = uploaded_file.read().decode("utf-8")
