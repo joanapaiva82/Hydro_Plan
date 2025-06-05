@@ -8,18 +8,18 @@ from io import BytesIO
 from typing import List, Dict, Optional
 
 # ────────────────────────────────────────────────────────────────────────────────
-# SESSION STATE INITIALIZATION (immediately after imports)
+# SESSION STATE INITIALIZATION
 # ────────────────────────────────────────────────────────────────────────────────
 def init_session_state():
     if "projects" not in st.session_state:
-        st.session_state["projects"] = []      # will hold List[Project]
+        st.session_state["projects"] = []      # List[Project]
     if "current_project_id" not in st.session_state:
         st.session_state["current_project_id"] = None
 
 init_session_state()
 
 # ────────────────────────────────────────────────────────────────────────────────
-# RERUN HELPER (use st.rerun(), not experimental_rerun)
+# HELPER: safe_rerun() calls st.rerun()
 # ────────────────────────────────────────────────────────────────────────────────
 def safe_rerun():
     st.rerun()
@@ -27,7 +27,7 @@ def safe_rerun():
 # ────────────────────────────────────────────────────────────────────────────────
 # CONSTANTS & COLOR MAP for the Gantt chart
 # ────────────────────────────────────────────────────────────────────────────────
-DEFAULT_SURVEY_SPEED = 5.0  # knots (used to calculate survey days)
+DEFAULT_SURVEY_SPEED = 5.0  # knots
 COLOR_MAP = {
     "Survey": "#2E86AB",
     "Maintenance": "#A23B72",
@@ -41,13 +41,14 @@ COLOR_MAP = {
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
-# CUSTOM CSS FOR:
-#   • FORCE st.info(...) TEXT TO WHITE
-#   • FORCE CHECKBOX LABELS TO WHITE
-#   • WHITE HEADER BOX with NAVY text on DARK NAVY background
-#   • WHITE checkbox labels
-#   • BUTTONS: “Add Vessel” / “Add Task” in dark‐navy text on white background
-#   • ALL other buttons (Create, Clear, Export/Import, Edit, Delete) in white‐text on blue‐gradient
+# CUSTOM CSS
+#   • st.info text forced to white
+#   • checkbox labels forced to white
+#   • header = white‐box with navy text
+#   • input labels = white, input fields = light gray
+#   • “Add Vessel” / “Add Task” buttons = dark‐navy text & border, red border on hover
+#   • all other buttons = white text on blue gradient
+#   • cards, expanders, plotly legend/text, etc.
 # ────────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Hydrographic Survey Estimator",
@@ -57,9 +58,10 @@ st.set_page_config(
 
 st.markdown(
     """
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        /* 0. Force all st.info() text to white (overrides default gray) */
+        /* 0. Force all st.info() text to white */
         .stInfo * {
             color: #FFFFFF !important;
         }
@@ -79,7 +81,7 @@ st.markdown(
         /* 3. Header Styling (white background + navy-blue text) */
         .stHeader {
             width: 100%;
-            background: #FFFFFF;            /* white box */
+            background: #FFFFFF;        
             padding: 25px 40px;
             margin-bottom: 20px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -88,12 +90,12 @@ st.markdown(
         .stHeader h1 {
             margin: 0;
             font-size: 2.5rem;
-            color: #0B1D3A;                 /* navy-blue text */
+            color: #0B1D3A;             /* navy‐blue text */
             text-align: center;
             font-weight: 600;
         }
 
-        /* 4. Project Selector Styling (wrap selectbox in .project-selectbox) */
+        /* 4. Project Selector Styling (selectbox labels + box) */
         .project-selectbox > label {
             color: #FFFFFF !important;
             font-size: 1rem;
@@ -120,7 +122,10 @@ st.markdown(
         }
 
         /* 6. Input Fields: White Labels, Light-Gray Boxes */
-        .stTextInput > label, .stNumberInput > label, .stDateInput > label, .stSelectbox > label {
+        .stTextInput > label, 
+        .stNumberInput > label, 
+        .stDateInput > label, 
+        .stSelectbox > label {
             color: #FFFFFF !important;
             font-size: 0.95rem;
             font-weight: 500;
@@ -139,21 +144,23 @@ st.markdown(
         }
 
         /* 7. Button Styling */
-        /*    a) Form “Add Vessel” / “Add Task”: dark-navy text on white background */
-        .add-form-button .stButton > button {
+        /*    a) “Add Vessel” / “Add Task”: dark‐navy text & border on white; red border on hover */
+        .add-form-button button {
             background: #FFFFFF !important;  
             color: #0B1D3A !important;       /* dark‐navy text */
-            border: 1px solid #DB504A !important;
+            border: 1px solid #0B1D3A !important; /* dark‐navy border */
             font-weight: 600;
             padding: 12px 24px !important;
             border-radius: 6px !important;
-            transition: transform 0.2s;
+            transition: transform 0.2s, border-color 0.2s;
         }
-        .add-form-button .stButton > button:hover {
+        .add-form-button button:hover {
+            border: 1px solid #DB504A !important;  /* red border on hover */
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
-        /*    b) All other standard buttons (e.g. “Create Project”, “Clear Project”, “Export / Import”): white text on gradient */
+
+        /*    b) All other standard buttons (Create, Clear, Export/Import, Edit, Delete): white text on blue gradient */
         .stButton > button {
             background: linear-gradient(135deg, #1E40AF, #3B82F6) !important;
             color: #FFFFFF !important;
@@ -161,7 +168,7 @@ st.markdown(
             font-weight: 600 !important;
             padding: 12px 24px !important;
             border-radius: 6px !important;
-            transition: transform 0.2s;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
         .stButton > button:hover {
             transform: translateY(-2px);
@@ -252,10 +259,7 @@ class Vessel:
         self.end_date = self.start_date + datetime.timedelta(days=self.total_days)
 
     def _convert_to_days(self, val: float, unit: str) -> float:
-        if unit == "hours":
-            return round(val / 24, 2)
-        else:
-            return val
+        return round(val / 24, 2) if unit == "hours" else val
 
     def to_dict(self) -> Dict:
         return {
@@ -391,7 +395,6 @@ st.markdown('<div class="section-header">1) Create / Select Project</div>', unsa
 
 col1, col2, col3 = st.columns([2, 2, 1])
 with col1:
-    # Wrap selectbox in a div so our CSS for .project-selectbox applies
     st.markdown('<div class="project-selectbox">', unsafe_allow_html=True)
     project_names = [p.name for p in st.session_state.get("projects", [])]
     project_options = ["➕ New Project"] + project_names
@@ -418,7 +421,6 @@ with col2:
                 st.session_state["current_project_id"] = proj.id
                 safe_rerun()
     else:
-        # Selecting an existing project from the dropdown
         chosen = sel
         for p in st.session_state.get("projects", []):
             if p.name == chosen:
@@ -427,7 +429,6 @@ with col2:
                     safe_rerun()
 
 with col3:
-    # “Clear Project” button clears the current_project_id
     if st.button("Clear Project", key="clear_project"):
         st.session_state["current_project_id"] = None
         safe_rerun()
@@ -446,21 +447,23 @@ st.markdown(
 )
 
 with st.expander("🚢 Add New Vessel", expanded=False):
-    # Wrap in .add-form-button so “Add Vessel” uses dark-navy text on white background
+    # Wrap in .add-form-button so the button text remains dark‐navy
     st.markdown('<div class="add-form-button">', unsafe_allow_html=True)
     with st.form("vessel_form"):
-        vcol1, vcol2 = st.columns([3, 2])
-        with vcol1:
+        # Three columns: 1) main vessel info, 2) numeric inputs, 3) unit dropdowns
+        colA, colB, colC = st.columns([3, 2, 1])
+        with colA:
             vessel_name = st.text_input("Vessel Name*", placeholder="e.g. Orca Explorer")
             vessel_km = st.number_input("Line Km for this Vessel*", min_value=0.1, step=1.0, value=0.1)
             start_date = st.date_input("Start Date*", value=datetime.date.today())
-        with vcol2:
+        with colB:
             transit_val = st.number_input("Transit Duration*", min_value=0.0, step=0.5, value=0.0, key="transit_val")
-            transit_unit = st.selectbox("Unit", ["days", "hours"], index=0, key="transit_unit")
             weather_val = st.number_input("Weather Downtime*", min_value=0.0, step=0.5, value=0.0, key="weather_val")
-            weather_unit = st.selectbox("Unit", ["days", "hours"], index=0, key="weather_unit")
             maintenance_val = st.number_input("Maintenance*", min_value=0.0, step=0.5, value=0.0, key="maintenance_val")
-            maintenance_unit = st.selectbox("Unit", ["days", "hours"], index=0, key="maintenance_unit")
+        with colC:
+            transit_unit = st.selectbox("Unit", ["days", "hours"], index=0, key="transit_unit")
+            weather_unit = st.selectbox("", ["days", "hours"], index=0, key="weather_unit")
+            maintenance_unit = st.selectbox("", ["days", "hours"], index=0, key="maintenance_unit")
 
         submitted = st.form_submit_button("Add Vessel")
         if submitted:
@@ -487,10 +490,9 @@ with st.expander("🚢 Add New Vessel", expanded=False):
                 current_project.vessels.append(new_v)
                 st.success(f"Vessel '{vessel_name}' added to project '{current_project.name}'!")
                 safe_rerun()
-
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Show existing vessels (if any)
+# Display existing vessels or “No vessels added…”
 if current_project.vessels:
     for v in current_project.vessels:
         with st.container():
@@ -515,33 +517,47 @@ if current_project.vessels:
                     with st.expander(f"✏️ Edit Vessel: {v.name}", expanded=True):
                         st.markdown('<div class="add-form-button">', unsafe_allow_html=True)
                         with st.form(f"vessel_edit_form_{v.id}"):
-                            ev1, ev2 = st.columns([3, 2])
-                            with ev1:
+                            # Same three-column layout for editing
+                            evA, evB, evC = st.columns([3, 2, 1])
+                            with evA:
                                 new_name = st.text_input("Vessel Name*", value=v.name)
-                                new_km = st.number_input("Line Km*", min_value=0.1, step=1.0, value=v.vessel_km)
-                                new_start = st.date_input("Start Date*", value=pd.to_datetime(v.start_date).date())
-                            with ev2:
-                                # Prepopulate days (since stored as days)
-                                new_transit = st.number_input(
-                                    "Transit Duration*", min_value=0.0, step=0.5,
-                                    value=v.transit_days, key=f"et_{v.id}_transit"
+                                new_km = st.number_input(
+                                    "Line Km*", min_value=0.1, step=1.0, value=v.vessel_km
                                 )
+                                new_start = st.date_input(
+                                    "Start Date*", value=pd.to_datetime(v.start_date).date()
+                                )
+                            with evB:
+                                new_transit = st.number_input(
+                                    "Transit Duration*",
+                                    min_value=0.0,
+                                    step=0.5,
+                                    value=v.transit_days,
+                                    key=f"et_{v.id}_transit"
+                                )
+                                new_weather = st.number_input(
+                                    "Weather Downtime*",
+                                    min_value=0.0,
+                                    step=0.5,
+                                    value=v.weather_days,
+                                    key=f"ew_{v.id}_weather"
+                                )
+                                new_maint = st.number_input(
+                                    "Maintenance*",
+                                    min_value=0.0,
+                                    step=0.5,
+                                    value=v.maintenance_days,
+                                    key=f"em_{v.id}_maint"
+                                )
+                            with evC:
                                 new_transit_unit = st.selectbox(
                                     "Unit", ["days", "hours"], index=0, key=f"et_{v.id}_tunit"
                                 )
-                                new_weather = st.number_input(
-                                    "Weather Downtime*", min_value=0.0, step=0.5,
-                                    value=v.weather_days, key=f"ew_{v.id}_weather"
-                                )
                                 new_weather_unit = st.selectbox(
-                                    "Unit", ["days", "hours"], index=0, key=f"ew_{v.id}_wunit"
-                                )
-                                new_maint = st.number_input(
-                                    "Maintenance*", min_value=0.0, step=0.5,
-                                    value=v.maintenance_days, key=f"em_{v.id}_maint"
+                                    "", ["days", "hours"], index=0, key=f"ew_{v.id}_wunit"
                                 )
                                 new_maint_unit = st.selectbox(
-                                    "Unit", ["days", "hours"], index=0, key=f"em_{v.id}_munit"
+                                    "", ["days", "hours"], index=0, key=f"em_{v.id}_munit"
                                 )
 
                             updated_button = st.form_submit_button("Update Vessel")
@@ -586,8 +602,11 @@ if current_project.vessels:
                     st.success(f"Deleted vessel '{v.name}'.")
                     safe_rerun()
 else:
-    # White “No vessels added” via CSS override on st.info
-    st.info("No vessels added yet to this project.")
+    # Render “No vessels added yet…” in pure white
+    st.markdown(
+        '<span style="color:#FFFFFF;">No vessels added yet to this project.</span>',
+        unsafe_allow_html=True
+    )
 
 # ────────────────────────────────────────────────────────────────────────────────
 # SECTION 3) ADD / EDIT / DELETE TASKS
@@ -769,8 +788,11 @@ if current_project.tasks:
                     st.success(f"Deleted task '{t.name}'.")
                     safe_rerun()
 else:
-    # White “No tasks added” via CSS override on st.info
-    st.info("No tasks added yet to this project.")
+    # Render “No tasks added yet…” in pure white
+    st.markdown(
+        '<span style="color:#FFFFFF;">No tasks added yet to this project.</span>',
+        unsafe_allow_html=True
+    )
 
 # ────────────────────────────────────────────────────────────────────────────────
 # SECTION 4) DATA MANAGEMENT (EXPORT / IMPORT)
@@ -783,7 +805,7 @@ with st.expander("💾 Export / Import Projects", expanded=False):
         st.markdown("**Export All Projects**")
         export_filename = st.text_input("Filename (no extension)", value="hydro_projects_export", key="export_name")
         if st.button("Export to JSON", key="export_json"):
-            data_out = { "projects": [p.to_dict() for p in st.session_state.get("projects", [])] }
+            data_out = {"projects": [p.to_dict() for p in st.session_state.get("projects", [])]}
             raw = json.dumps(data_out, indent=2)
             st.download_button(
                 label="Download JSON",
