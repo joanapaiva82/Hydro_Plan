@@ -129,7 +129,7 @@ st.markdown(
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
-        /* 6b) All other standard buttons (blue gradient / white) */
+        /* 6b) All other standard buttons */
         .stButton > button {
             background: linear-gradient(135deg, #1E40AF, #3B82F6) !important;
             color: #FFFFFF !important;
@@ -216,7 +216,7 @@ class Vessel:
     ):
         self.id = id or str(uuid4())
         self.name = name
-        self.vessel_km = vessel_km              # total line-km to survey
+        self.vessel_km = vessel_km
         self.start_date = start_date
 
         # Convert hours→days if needed
@@ -611,7 +611,7 @@ if st.session_state.get("editing_vessel"):
                             maintenance_unit=new_maint_unit,
                             id=to_edit.id
                         )
-                        # Replace in-place
+                        # Replace in‐place
                         current_project.vessels = [
                             x for x in current_project.vessels if x.id != to_edit.id
                         ] + [updated_v]
@@ -1111,10 +1111,10 @@ else:
     )
 
     # Draw a vertical “Today” line (dashed red)
-    # Use a pure Python date so Plotly won’t error out
-    today = datetime.date.today()
+    # Use a pandas Timestamp so Plotly can compute _mean without error
+    today_ts = pd.to_datetime(datetime.date.today())
     fig.add_vline(
-        x=today,
+        x=today_ts,
         line_dash="dash",
         line_color="#DB504A",
         annotation_text="Today",
