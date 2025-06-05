@@ -1,7 +1,7 @@
 import streamlit as st
 import datetime
 import pandas as pd
-import plotly.graph_objects as go
+import plotly.express as px
 import json
 from uuid import uuid4
 from io import BytesIO
@@ -178,12 +178,19 @@ st.markdown(
             color: #FFFFFF !important;
             font-weight: 500 !important;
         }
-        /* 9) Gantt chart: legend & text dark-navy */
-        .js-plotly-plot .legendtext {
+        /* 9) Gantt chart: legend, axis & text dark-navy */
+        .js-plotly-plot .legend text {
             fill: #0B1D3A !important;
         }
-        .js-plotly-plot .traces text {
+        .js-plotly-plot .xtick text {
             fill: #0B1D3A !important;
+        }
+        .js-plotly-plot .ytick text {
+            fill: #0B1D3A !important;
+        }
+        .js-plotly-plot .plotly .text {
+            fill: #FFFFFF !important; /* white text inside bars */
+            font-size: 12px !important;
         }
     </style>
     """,
@@ -212,7 +219,7 @@ class Vessel:
         self.vessel_km = vessel_km
         self.start_date = start_date
 
-        # Convert hours → days if needed
+        # Convert hours→days if needed
         self.transit_days = self._convert_to_days(transit, transit_unit)
         self.weather_days = self._convert_to_days(weather, weather_unit)
         self.maintenance_days = self._convert_to_days(maintenance, maintenance_unit)
@@ -426,6 +433,7 @@ if current_project is None:
     )
     st.stop()
 
+
 # ────────────────────────────────────────────────────────────────────────────────
 # SECTION 2) ADD / EDIT / DELETE VESSELS
 # ────────────────────────────────────────────────────────────────────────────────
@@ -603,13 +611,14 @@ if st.session_state.get("editing_vessel"):
                             maintenance_unit=new_maint_unit,
                             id=to_edit.id
                         )
-                        # Replace the old vessel with updated one
+                        # Replace in-place
                         current_project.vessels = [
                             x for x in current_project.vessels if x.id != to_edit.id
                         ] + [updated_v]
                         st.success(f"Vessel '{new_name.strip()}' updated!")
                         st.session_state["editing_vessel"] = None
             st.markdown('</div>', unsafe_allow_html=True)
+
 
 # ────────────────────────────────────────────────────────────────────────────────
 # SECTION 3) ADD / EDIT / DELETE TASKS
@@ -670,7 +679,7 @@ with st.expander("📝 Add New Task", expanded=False):
             )
             pause_survey = st.checkbox("Pause Survey Operations", key="new_task_pause")
         with col2:
-            st.write("")
+            st.write("")  # padding column
             st.write("")
 
         add_task_btn = st.form_submit_button("Add Task")
@@ -816,7 +825,7 @@ if st.session_state.get("editing_task"):
                         key=f"edit_pause_{to_edit_t.id}"
                     )
                 with colE2:
-                    st.write("")
+                    st.write("")  # padding column
                     st.write("")
 
                 update_task_btn = st.form_submit_button("Update Task")
@@ -851,6 +860,7 @@ if st.session_state.get("editing_task"):
                         st.success(f"Task '{e_name.strip()}' updated!")
                         st.session_state["editing_task"] = None
             st.markdown('</div>', unsafe_allow_html=True)
+
 
 # ────────────────────────────────────────────────────────────────────────────────
 # SECTION 4) DATA MANAGEMENT (EXPORT / IMPORT)
@@ -994,6 +1004,7 @@ with st.expander("💾 Export / Import Projects", expanded=False):
             except Exception as e:
                 st.error(f"Error importing: {e}")
 
+
 # ────────────────────────────────────────────────────────────────────────────────
 # SECTION 5) PROJECT TIMELINE (GANTT CHART)
 # ────────────────────────────────────────────────────────────────────────────────
@@ -1003,13 +1014,14 @@ proj = get_current_project()
 if proj is None:
     st.stop()
 
+
 def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
     rows = []
     for v in vessels:
         survey_start = pd.to_datetime(v.start_date)
-        survey_end   = pd.to_datetime(v.end_date)
+        survey_end = pd.to_datetime(v.end_date)
 
-        # Any “pause” tasks for this vessel
+        # Gather any pause‐tasks for this vessel, sorted by start date
         pauses = sorted(
             [t for t in tasks if (t.vessel_id == v.id and t.pause_survey)],
             key=lambda t: pd.to_datetime(t.start_date)
@@ -1018,7 +1030,8 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
         cur_start = survey_start
         for t in pauses:
             t_start = pd.to_datetime(t.start_date)
-            t_end   = pd.to_datetime(t.end_date)
+            t_end = pd.to_datetime(t.end_date)
+            # 1) If there is a gap between last resume and next pause, draw that Survey segment:
             if t_start > cur_start:
                 rows.append({
                     "Task":     f"Survey ► {v.name}",
@@ -1027,6 +1040,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                     "Resource": v.name,
                     "Type":     "Survey"
                 })
+            # 2) Draw the pause task itself:
             rows.append({
                 "Task":     t.name,
                 "Start":    t_start,
@@ -1034,8 +1048,10 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                 "Resource": v.name,
                 "Type":     t.task_type
             })
+            # 3) Mark that after t_end, survey will resume:
             cur_start = t_end
 
+        # 4) Once all pause‐tasks are handled, if any survey time remains, draw final “Survey” piece:
         if cur_start < survey_end:
             rows.append({
                 "Task":     f"Survey ► {v.name}",
@@ -1045,7 +1061,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                 "Type":     "Survey"
             })
 
-    # Unassigned tasks (no vessel_id)
+    # 5) Unassigned tasks:
     for t in tasks:
         if t.vessel_id is None:
             rows.append({
@@ -1058,147 +1074,86 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
 
     return pd.DataFrame(rows)
 
+
 timeline_df = build_timeline_df(proj.vessels, proj.tasks)
 
 if timeline_df.empty:
     st.markdown(
-        '<span style="color:#FFFFFF;">No timeline data available for this project. '
-        'Add vessels/tasks above.</span>',
+        '<span style="color:#FFFFFF;">No timeline data available for this project. Add vessels/tasks above.</span>',
         unsafe_allow_html=True
     )
 else:
-    # Build a list of distinct Resource names (to get row order)
-    resources = timeline_df["Resource"].unique().tolist()
-    n_rows    = len(resources)
-    # Map each Resource → a Y‐index (0 at top)
-    row_positions = {res: idx for idx, res in enumerate(resources)}
-
-    fig = go.Figure()
-
-    # (Optional) Draw alternating “lane” backgrounds for each row
-    for res, idx in row_positions.items():
-        lane_color = "#F2F2F2" if (idx % 2 == 0) else "#FFFFFF"
-        fig.add_shape(
-            type="rect",
-            xref="x", yref="y",
-            x0=timeline_df["Start"].min() - pd.Timedelta(days=3),
-            x1=timeline_df["Finish"].max()  + pd.Timedelta(days=3),
-            y0=idx - 0.4, y1=idx + 0.4,
-            fillcolor=lane_color,
-            line_width=0,
-            layer="below"
-        )
-
-    # Draw a “Today” line in dashed red
-    today_date = pd.to_datetime(datetime.date.today())
-    fig.add_shape(
-        type="line",
-        x0=today_date, x1=today_date,
-        yref="paper", y0=0, y1=1,
-        line=dict(color="red", width=2, dash="dash"),
-        layer="above"
+    # Create Plotly Gantt chart with “text inside bars” and custom legend
+    fig = px.timeline(
+        timeline_df,
+        x_start="Start",
+        x_end="Finish",
+        y="Resource",
+        color="Type",
+        color_discrete_map=COLOR_MAP,
+        hover_name="Task",
+        title=f"Gantt Chart ► {proj.name}",
+        text="Task",  # labels inside each bar
     )
 
-    # Add one horizontal Bar for each row in timeline_df
-    seen_types = set()
-    for _, row in timeline_df.iterrows():
-        y_idx     = row_positions[row["Resource"]]
-        bar_color = COLOR_MAP.get(row["Type"], COLOR_MAP["Other"])
-        bar_name  = row["Type"]
-
-        # Only show the legend once per Type
-        first_time = (bar_name not in seen_types)
-        if first_time:
-            seen_types.add(bar_name)
-
-        fig.add_trace(
-            go.Bar(
-                x=[row["Finish"]],           # bar “end” date
-                base=[row["Start"]],         # bar “start” date
-                y=[n_rows - 1 - y_idx],      # invert Y so 0 is at top
-                orientation="h",
-                marker_color=bar_color,
-                marker_line_width=0,
-                width=0.5,
-                name=bar_name,
-                showlegend=first_time,
-
-                # Label the bar with its Task name, inside the bar
-                text=[row["Task"]],
-                textposition="inside",
-                insidetextanchor="middle",
-                textfont=dict(color="#FFFFFF", size=14, family="Arial"),
-
-                hovertemplate=(
-                    "<b>%{customdata[0]}</b><br>"
-                    "Type: %{customdata[1]}<br>"
-                    "Start: %{base|%Y-%m-%d}<br>"
-                    "Finish: %{x|%Y-%m-%d}<extra></extra>"
-                ),
-                customdata=[[row["Task"], row["Type"]]]
-            )
-        )
-
-    # Layout adjustments: 
-    #  • plot_bgcolor="#FFFFFF", paper_bgcolor transparent 
-    #  • legend above chart 
-    #  • enforce dtick so x-axis always shows date labels 
-    #  • set barmode="overlay" so overlapping bars in the same row don’t stack
-    fig.update_layout(
-        height=max(400, 80 * n_rows),
-        margin=dict(l=10, r=10, t=120, b=50),
-        plot_bgcolor="#FFFFFF",
-        paper_bgcolor="rgba(0,0,0,0)",
-
-        barmode="overlay",  # Overlap bars on the same row instead of stacking
-
-        # Legend: horizontal, above the chart:
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.08,
-            xanchor="center",
-            x=0.5,
-            bgcolor="rgba(255,255,255,1)",
-            bordercolor="#CCCCCC",
-            borderwidth=1,
-            font=dict(color="#0B1D3A", size=14)
-        ),
-
-        title=dict(
-            text=f"Gantt Chart ► {proj.name}",
-            font_size=22,
-            font_color="#0B1D3A",
-            x=0.01
-        )
-    )
-
-    # Y‐axis: show each Resource name on the left
+    # Reverse Y‐axis so top resource is first
     fig.update_yaxes(
-        tickmode="array",
-        tickvals=[n_rows - 1 - i for i in range(n_rows)],
-        ticktext=resources,
-        autorange=False,
-        range=[-0.5, n_rows - 0.5],
+        autorange="reversed",
         title_text="",
-        tickfont=dict(color="#0B1D3A", size=14, family="Arial"),
-        gridcolor="rgba(0,0,0,0)"
+        tickfont=dict(color="#0B1D3A", size=12),
+        title_font=dict(color="#0B1D3A")
     )
 
-    # X‐axis: force date type, angle labels, add ticks even if only one bar
+    # X‐axis (date) formatting: ensure actual date ticks are shown
     fig.update_xaxes(
         type="date",
-        tickformat="%b %d, %Y",
-        tickangle=-45,
-        showgrid=True,
-        gridcolor="rgba(200,200,200,0.2)",
-        ticks="outside",
-        tickfont=dict(color="#0B1D3A", size=14, family="Arial"),
         title_text="Date",
-        title_font=dict(color="#0B1D3A", size=16, family="Arial"),
-        rangemode="normal",
-        dtick="M1"  # ← Force a monthly tick so at least one date appears
+        tickfont=dict(color="#0B1D3A", size=12),
+        title_font=dict(color="#0B1D3A", size=14),
+        showgrid=True,
+        gridcolor="rgba(200,200,200,0.2)"
     )
 
-    # Finally render it full‐width
+    # Draw a vertical “Today” line (dashed red)
+    today = pd.to_datetime(datetime.date.today())
+    fig.add_vline(
+        x=today,
+        line_dash="dash",
+        line_color="#DB504A",
+        annotation_text="Today",
+        annotation_position="top left",
+        annotation_font_color="#DB504A",
+        annotation_font_size=12
+    )
+
+    # Update traces to show text inside each bar
+    fig.update_traces(
+        textfont=dict(color="#FFFFFF", size=12),
+        textposition="inside",
+        insidetextanchor="middle"
+    )
+
+    # Legend placement, box style
+    fig.update_layout(
+        height=max(400, len(proj.vessels) * 100 + len(proj.tasks) * 50),
+        plot_bgcolor="rgba(255,255,255,0)",
+        paper_bgcolor="rgba(255,255,255,0)",
+        font_color="#0B1D3A",
+        title_font=dict(color="#0B1D3A", size=20),
+        legend_title_text="Activity Type",
+        legend_font=dict(color="#0B1D3A", size=12),
+        legend=dict(
+            orientation="h",
+            x=0.5,
+            xanchor="center",
+            y=1.10,
+            yanchor="bottom",
+            bgcolor="rgba(255,255,255,0.8)",
+            bordercolor="#0B1D3A",
+            borderwidth=1
+        ),
+        margin=dict(l=20, r=20, t=80, b=20)
+    )
+
+    # Finally, display
     st.plotly_chart(fig, use_container_width=True)
