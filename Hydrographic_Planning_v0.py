@@ -12,13 +12,21 @@ from typing import List, Dict, Optional
 # ────────────────────────────────────────────────────────────────────────────────
 def init_session_state():
     if "projects" not in st.session_state:
-        st.session_state["projects"] = []  # Will hold Project objects
+        st.session_state["projects"] = []  # List[Project]
     if "current_project_id" not in st.session_state:
         st.session_state["current_project_id"] = None
     if "editing_vessel" not in st.session_state:
         st.session_state["editing_vessel"] = None  # vessel_id being edited
     if "editing_task" not in st.session_state:
         st.session_state["editing_task"] = None    # task_id being edited
+
+    # Default keys for new‐task form
+    if "new_task_name" not in st.session_state:
+        st.session_state["new_task_name"] = ""
+    if "new_task_type" not in st.session_state:
+        st.session_state["new_task_type"] = "Survey"
+    if "new_task_other" not in st.session_state:
+        st.session_state["new_task_other"] = ""
 
 init_session_state()
 
@@ -53,7 +61,7 @@ st.markdown(
     <link rel="stylesheet"
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        /* 0) st.info() text forced to white */
+        /* 0) Force st.info() text to white */
         .stInfo * {
             color: #FFFFFF !important;
         }
@@ -61,13 +69,13 @@ st.markdown(
         .stCheckbox, .stCheckbox * {
             color: #FFFFFF !important;
         }
-        /* 2) Dark‐navy background and white default text */
+        /* 2) Overall Dark‐nav background & white text */
         html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
             background: #0B1D3A;
             color: #FFFFFF;
             font-family: 'Arial', sans-serif;
         }
-        /* 3) Header (white background + navy text) */
+        /* 3) Header: white background + navy text */
         .stHeader {
             width: 100%;
             background: #FFFFFF;
@@ -108,18 +116,18 @@ st.markdown(
             padding-left: 10px;
         }
         /* 6) Input field labels & boxes */
-        .stTextInput > label, 
-        .stNumberInput > label, 
-        .stDateInput > label, 
+        .stTextInput > label,
+        .stNumberInput > label,
+        .stDateInput > label,
         .stSelectbox > label {
             color: #FFFFFF !important;
             font-size: 0.95rem;
             font-weight: 500;
             margin-bottom: 4px;
         }
-        .stTextInput input[type="text"], 
-        .stNumberInput input[type="number"], 
-        .stDateInput input[type="text"], 
+        .stTextInput input[type="text"],
+        .stNumberInput input[type="number"],
+        .stDateInput input[type="text"],
         .stSelectbox select {
             background: #F5F5F5 !important;
             color: #000000 !important;
@@ -128,7 +136,7 @@ st.markdown(
             padding: 8px !important;
             width: 100% !important;
         }
-        /* 7a) “Add Vessel”/“Add Task” containers—button text dark‐navy */
+        /* 7a) “Add Vessel” / “Add Task”: Dark‐navy text on white background */
         .add-form-button .stButton > button {
             background: #FFFFFF !important;
             color: #0B1D3A !important;
@@ -143,7 +151,7 @@ st.markdown(
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
-        /* 7b) All other standard buttons (Create/Update/Clear/Export/Import/Edit/Delete) */
+        /* 7b) All other standard buttons */
         .stButton > button {
             background: linear-gradient(135deg, #1E40AF, #3B82F6) !important;
             color: #FFFFFF !important;
@@ -194,10 +202,10 @@ st.markdown(
         }
         /* 10) Plotly Timeline: legend & text contrast */
         .js-plotly-plot .legendtext {
-            fill: #0B1D3A !important;  /* dark‐navy legend text */
+            fill: #0B1D3A !important;  /* dark‐navy */
         }
         .js-plotly-plot .traces text {
-            fill: #0B1D3A !important;  /* dark‐navy data labels */
+            fill: #0B1D3A !important;  /* dark‐navy */
         }
     </style>
     """,
@@ -556,29 +564,29 @@ if st.session_state.get("editing_vessel"):
                     new_start = st.date_input("Start Date*", value=to_edit.start_date)
                 with eB:
                     new_transit_text = st.text_input(
-                        "Transit Duration*",
-                        value=str(to_edit.transit_days),
+                        "Transit Duration*", value=str(to_edit.transit_days),
                         key=f"et_{to_edit.id}_transit_text"
                     )
                     new_weather_text = st.text_input(
-                        "Weather Downtime*",
-                        value=str(to_edit.weather_days),
+                        "Weather Downtime*", value=str(to_edit.weather_days),
                         key=f"ew_{to_edit.id}_weather_text"
                     )
                     new_maint_text = st.text_input(
-                        "Maintenance*",
-                        value=str(to_edit.maintenance_days),
+                        "Maintenance*", value=str(to_edit.maintenance_days),
                         key=f"em_{to_edit.id}_maint_text"
                     )
                 with eC:
                     new_transit_unit = st.selectbox(
-                        "Unit", ["days", "hours"], index=0, key=f"et_{to_edit.id}_tunit"
+                        "Unit", ["days", "hours"], index=0,
+                        key=f"et_{to_edit.id}_tunit"
                     )
                     new_weather_unit = st.selectbox(
-                        "", ["days", "hours"], index=0, key=f"ew_{to_edit.id}_wunit"
+                        "", ["days", "hours"], index=0,
+                        key=f"ew_{to_edit.id}_wunit"
                     )
                     new_maint_unit = st.selectbox(
-                        "", ["days", "hours"], index=0, key=f"em_{to_edit.id}_munit"
+                        "", ["days", "hours"], index=0,
+                        key=f"em_{to_edit.id}_munit"
                     )
 
                 update_button = st.form_submit_button("Update Vessel")
@@ -637,43 +645,79 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# — Callback to auto‐populate “Task Name” when “Task Type” changes
+def on_task_type_change():
+    ttype = st.session_state["new_task_type"]
+    if ttype != "Other":
+        st.session_state["new_task_name"] = ttype
+    else:
+        st.session_state["new_task_name"] = ""
+
 with st.expander("📝 Add New Task", expanded=False):
     st.markdown('<div class="add-form-button">', unsafe_allow_html=True)
     with st.form("task_form"):
         t1, t2 = st.columns(2)
         with t1:
-            task_name = st.text_input("Task Name*", placeholder="e.g. Sediment Sampling", key="new_task_name")
+            # “Task Name” box
+            task_name = st.text_input(
+                "Task Name*",
+                value=st.session_state["new_task_name"],
+                placeholder="e.g. Sediment Sampling",
+                key="new_task_name"
+            )
+            # “Task Type” selectbox with on_change callback
             task_type = st.selectbox(
                 "Task Type*",
                 options=[
                     "Survey", "Maintenance", "Weather", "Transit", "Delay",
                     "Sediment Sample", "Deployment", "Recovery", "Other"
                 ],
-                index=0,
-                key="new_task_type"
+                index=[
+                    "Survey", "Maintenance", "Weather", "Transit", "Delay",
+                    "Sediment Sample", "Deployment", "Recovery", "Other"
+                ].index(st.session_state["new_task_type"]),
+                key="new_task_type",
+                on_change=on_task_type_change,
             )
-            # Auto‐populate task_name if not "Other"
-            if task_type != "Other":
-                st.session_state["new_task_name"] = task_type
-            else:
-                # If "Other", the user must type a custom name:
-                other_label = st.text_input("Specify “Other” Task Type*", placeholder="Enter custom task type here", key="new_task_other")
-
+            # If “Other,” show a second text box to specify
+            if task_type == "Other":
+                task_other = st.text_input(
+                    "Specify “Other” Task Type*",
+                    value=st.session_state["new_task_other"],
+                    placeholder="Enter custom task type here",
+                    key="new_task_other"
+                )
         with t2:
-            start_date_t = st.date_input("Start Date*", key="new_task_start")
-            end_date_t = st.date_input("End Date*", value=datetime.date.today() + datetime.timedelta(days=1), key="new_task_end")
-            vessel_options = [("Unassigned", None)] + [(v.name, v.id) for v in current_project.vessels]
+            start_date_t = st.date_input(
+                "Start Date*", key="new_task_start"
+            )
+            end_date_t = st.date_input(
+                "End Date*",
+                value=datetime.date.today() + datetime.timedelta(days=1),
+                key="new_task_end"
+            )
+            vessel_options = [("Unassigned", None)] + [
+                (v.name, v.id) for v in current_project.vessels
+            ]
             sel_vessel = st.selectbox(
                 "Assign to Vessel",
                 options=vessel_options,
                 format_func=lambda x: x[0],
                 key="new_task_vessel"
             )
-            pause_survey = st.checkbox("Pause Survey Operations", value=False, key="new_task_pause")
+            pause_survey = st.checkbox(
+                "Pause Survey Operations",
+                value=False,
+                key="new_task_pause"
+            )
 
         add_task_btn = st.form_submit_button("Add Task")
         if add_task_btn:
-            chosen_type = task_type if task_type != "Other" else st.session_state.get("new_task_other", "").strip()
+            chosen_type = (
+                task_type
+                if task_type != "Other"
+                else st.session_state["new_task_other"].strip()
+            )
             errs = []
             if not task_name.strip():
                 errs.append("Task name cannot be empty.")
@@ -681,6 +725,7 @@ with st.expander("📝 Add New Task", expanded=False):
                 errs.append("End date must be on or after start date.")
             if task_type == "Other" and not chosen_type:
                 errs.append("You selected “Other,” but did not specify a name.")
+
             if errs:
                 for e in errs:
                     st.error(e)
@@ -695,6 +740,10 @@ with st.expander("📝 Add New Task", expanded=False):
                 )
                 current_project.tasks.append(new_task)
                 st.success(f"Task '{task_name.strip()}' added!")
+                # Clear the form fields afterward:
+                st.session_state["new_task_name"] = ""
+                st.session_state["new_task_type"] = "Survey"
+                st.session_state["new_task_other"] = ""
     st.markdown('</div>', unsafe_allow_html=True)
 
 # — Display Existing Tasks + Edit/Delete Buttons
@@ -732,46 +781,73 @@ if st.session_state.get("editing_task"):
         with st.expander(f"✏️ Edit Task: {to_edit_t.name}", expanded=True):
             st.markdown('<div class="add-form-button">', unsafe_allow_html=True)
             with st.form(f"task_edit_form_{to_edit_t.id}"):
+                # Provide separate session_state keys for this edit form
                 et1, et2 = st.columns(2)
                 with et1:
-                    new_name = st.text_input("Task Name*", value=to_edit_t.name, key=f"_edit_name_{to_edit_t.id}")
+                    key_name = f"edit_name_{to_edit_t.id}"
+                    key_type = f"edit_type_{to_edit_t.id}"
+                    key_other = f"edit_other_{to_edit_t.id}"
+
+                    # Pre‐initialize session_state keys if missing
+                    if key_name not in st.session_state:
+                        st.session_state[key_name] = to_edit_t.name
+                    if key_type not in st.session_state:
+                        st.session_state[key_type] = (
+                            to_edit_t.task_type
+                            if to_edit_t.task_type in [
+                                "Survey", "Maintenance", "Weather", "Transit",
+                                "Delay", "Sediment Sample", "Deployment", "Recovery"
+                            ]
+                            else "Other"
+                        )
+                    if key_other not in st.session_state:
+                        st.session_state[key_other] = (
+                            to_edit_t.task_type
+                            if to_edit_t.task_type not in [
+                                "Survey", "Maintenance", "Weather", "Transit",
+                                "Delay", "Sediment Sample", "Deployment", "Recovery"
+                            ]
+                            else ""
+                        )
+
+                    new_name = st.text_input("Task Name*", value=st.session_state[key_name], key=key_name)
                     new_type = st.selectbox(
                         "Task Type*",
                         options=[
                             "Survey", "Maintenance", "Weather", "Transit", "Delay",
                             "Sediment Sample", "Deployment", "Recovery", "Other"
                         ],
-                        index=(
-                            ["Survey","Maintenance","Weather","Transit","Delay",
-                             "Sediment Sample","Deployment","Recovery"]
-                            .index(to_edit_t.task_type)
-                            if to_edit_t.task_type in [
-                                "Survey","Maintenance","Weather","Transit","Delay",
-                                "Sediment Sample","Deployment","Recovery"
-                            ] else 8
-                        ),
-                        key=f"_edit_type_{to_edit_t.id}"
+                        index=[
+                            "Survey", "Maintenance", "Weather", "Transit", "Delay",
+                            "Sediment Sample", "Deployment", "Recovery", "Other"
+                        ].index(st.session_state[key_type]),
+                        key=key_type,
                     )
-                    # If type changes and is not “Other,” fill name box automatically:
-                    if new_type != "Other":
-                        st.session_state[f"_edit_name_{to_edit_t.id}"] = new_type
-                    else:
-                        new_other = st.text_input(
-                            "Specify “Other” Type*",
-                            value=(
-                                to_edit_t.task_type
-                                if to_edit_t.task_type
-                                not in [
-                                    "Survey","Maintenance","Weather","Transit","Delay",
-                                    "Sediment Sample","Deployment","Recovery"
-                                ]
-                                else ""
-                            ),
-                            key=f"_edit_other_{to_edit_t.id}"
+                    # If “Other,” show a second text box
+                    if new_type == "Other":
+                        other_val = st.text_input(
+                            "Specify “Other” Task Type*",
+                            value=st.session_state[key_other],
+                            key=key_other
                         )
                 with et2:
-                    new_start = st.date_input("Start Date*", value=to_edit_t.start_date, key=f"_edit_start_{to_edit_t.id}")
-                    new_end = st.date_input("End Date*", value=to_edit_t.end_date, key=f"_edit_end_{to_edit_t.id}")
+                    key_start = f"edit_start_{to_edit_t.id}"
+                    key_end = f"edit_end_{to_edit_t.id}"
+                    key_vessel = f"edit_vessel_{to_edit_t.id}"
+                    key_pause = f"edit_pause_{to_edit_t.id}"
+
+                    if key_start not in st.session_state:
+                        st.session_state[key_start] = to_edit_t.start_date
+                    if key_end not in st.session_state:
+                        st.session_state[key_end] = to_edit_t.end_date
+                    if key_vessel not in st.session_state:
+                        st.session_state[key_vessel] = to_edit_t.vessel_id
+                    if key_pause not in st.session_state:
+                        st.session_state[key_pause] = to_edit_t.pause_survey
+
+                    new_start = st.date_input("Start Date*", value=st.session_state[key_start], key=key_start)
+                    new_end = st.date_input("End Date*", value=st.session_state[key_end], key=key_end)
+
                     vessel_options_edit = [("Unassigned", None)] + [
                         (v.name, v.id) for v in current_project.vessels
                     ]
@@ -785,17 +861,17 @@ if st.session_state.get("editing_task"):
                         options=vessel_options_edit,
                         index=default_idx,
                         format_func=lambda x: x[0],
-                        key=f"_edit_vessel_{to_edit_t.id}"
+                        key=key_vessel
                     )
                     new_pause = st.checkbox(
                         "Pause Survey Operations",
-                        value=to_edit_t.pause_survey,
-                        key=f"_edit_pause_{to_edit_t.id}"
+                        value=st.session_state[key_pause],
+                        key=key_pause
                     )
 
                 update_task_btn = st.form_submit_button("Update Task")
                 if update_task_btn:
-                    chosen_t = new_type if new_type != "Other" else st.session_state.get(f"_edit_other_{to_edit_t.id}", "").strip()
+                    chosen_t = new_type if new_type != "Other" else st.session_state[key_other].strip()
                     errs = []
                     if not new_name.strip():
                         errs.append("Task name cannot be empty.")
@@ -1020,7 +1096,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                 "Type": "Survey"
             })
 
-    # Unassigned tasks appear on their own “Unassigned” row
+    # Unassigned tasks appear in “Unassigned” row
     for t in tasks:
         if t.vessel_id is None:
             rows.append({
@@ -1052,27 +1128,27 @@ else:
         title=f"Gantt Chart ► {proj.name}"
     )
 
-    # Y‐axis reversed; tick labels in dark‐navy
+    # Reverse Y‐axis; dark‐navy tick labels
     fig.update_yaxes(
         autorange="reversed",
         title_text="",
         tickfont=dict(color="#0B1D3A"),
         title_font=dict(color="#0B1D3A")
     )
-    # X‐axis (dates) with dark‐navy ticks
+    # X‐axis (dates) dark‐navy
     fig.update_xaxes(
         title_text="Date",
         tickfont=dict(color="#0B1D3A"),
         title_font=dict(color="#0B1D3A")
     )
 
-    # Layout: set chart title to dark‐navy as well
+    # Layout: dark‐navy title & labels
     fig.update_layout(
         height=max(400, len(proj.vessels) * 100 + len(proj.tasks) * 50),
         plot_bgcolor="rgba(255,255,255,0.1)",
         paper_bgcolor="rgba(0,0,0,0)",
-        font_color="#0B1D3A",                        # default font color to dark‐navy
-        title_font=dict(color="#0B1D3A", size=20),   # chart title in dark‐navy
+        font_color="#0B1D3A",
+        title_font=dict(color="#0B1D3A", size=20),
         legend_title_text="Activity Type",
         legend_font=dict(color="#0B1D3A"),
         hoverlabel=dict(
