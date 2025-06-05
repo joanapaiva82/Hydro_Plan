@@ -25,7 +25,7 @@ init_session_state()
 # ────────────────────────────────────────────────────────────────────────────────
 # CONSTANTS & COLOR_MAP for Gantt
 # ────────────────────────────────────────────────────────────────────────────────
-DEFAULT_SURVEY_SPEED = 5.0  # knots
+DEFAULT_SURVEY_SPEED = 5.0  # knots (used to compute survey days)
 
 COLOR_MAP = {
     "Survey": "#2E86AB",
@@ -40,7 +40,7 @@ COLOR_MAP = {
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
-# INJECT CUSTOM CSS (button/text color, white “No…” messages, etc.)
+# INJECT CUSTOM CSS (all fixes: immediate input focus, button/text color, etc.)
 # ────────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Hydrographic Survey Estimator",
@@ -114,8 +114,8 @@ st.markdown(
             padding: 8px !important;
             width: 100% !important;
         }
-        /* 6a) “Add Vessel” & “Add Task” buttons: dark‐navy text on white box */
-        .add-form-button .stButton > button {
+        /* 6a) “Add Vessel” & “Add Task” buttons: dark-navy text on white box */
+        .add-form-button button {
             background: #FFFFFF !important;
             color: #0B1D3A !important;
             border: 1px solid #0B1D3A !important;
@@ -124,12 +124,12 @@ st.markdown(
             border-radius: 6px !important;
             transition: transform 0.2s, border-color 0.2s;
         }
-        .add-form-button .stButton > button:hover {
+        .add-form-button button:hover {
             border: 1px solid #DB504A !important;
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
-        /* 6b) All other standard buttons */
+        /* 6b) All other standard buttons (blue gradient / white) */
         .stButton > button {
             background: linear-gradient(135deg, #1E40AF, #3B82F6) !important;
             color: #FFFFFF !important;
@@ -178,8 +178,8 @@ st.markdown(
             color: #FFFFFF !important;
             font-weight: 500 !important;
         }
-        /* 9) Gantt chart: legend & axis text styling */
-        .js-plotly-plot .legendtext {
+        /* 9) Gantt chart: legend, axis & text styling */
+        .js-plotly-plot .legend text {
             fill: #0B1D3A !important;
         }
         .js-plotly-plot .xtick text {
@@ -189,7 +189,7 @@ st.markdown(
             fill: #0B1D3A !important;
         }
         .js-plotly-plot .plotly .text {
-            fill: #FFFFFF !important;
+            fill: #FFFFFF !important;  /* white text inside bars */
             font-size: 12px !important;
         }
     </style>
@@ -216,10 +216,10 @@ class Vessel:
     ):
         self.id = id or str(uuid4())
         self.name = name
-        self.vessel_km = vessel_km
+        self.vessel_km = vessel_km              # total line-km to survey
         self.start_date = start_date
 
-        # Convert hours → days if needed
+        # Convert hours→days if needed
         self.transit_days = self._convert_to_days(transit, transit_unit)
         self.weather_days = self._convert_to_days(weather, weather_unit)
         self.maintenance_days = self._convert_to_days(maintenance, maintenance_unit)
@@ -433,6 +433,7 @@ if current_project is None:
     )
     st.stop()
 
+
 # ────────────────────────────────────────────────────────────────────────────────
 # SECTION 2) ADD / EDIT / DELETE VESSELS
 # ────────────────────────────────────────────────────────────────────────────────
@@ -511,7 +512,7 @@ for v in current_project.vessels:
                 <div class="card">
                     <h4><i class="fas fa-ship"></i> {v.name}</h4>
                     <p><strong>Survey:</strong> {v.vessel_km} km</p>
-                    <p><strong>Schedule:</strong> {v.start_date} → {v.end_date} ({v.total_days} days)</p>
+                    <p><strong>Schedule:</strong> {v.start_date} &rarr; {v.end_date} ({v.total_days} days)</p>
                     <p><strong>Breakdown:</strong> Survey: {v.survey_days} d |
                       Transit: {v.transit_days} d |
                       Weather: {v.weather_days} d |
@@ -610,13 +611,14 @@ if st.session_state.get("editing_vessel"):
                             maintenance_unit=new_maint_unit,
                             id=to_edit.id
                         )
-                        # Preserve original order: remove old, append updated
+                        # Replace in-place
                         current_project.vessels = [
                             x for x in current_project.vessels if x.id != to_edit.id
                         ] + [updated_v]
                         st.success(f"Vessel '{new_name.strip()}' updated!")
                         st.session_state["editing_vessel"] = None
             st.markdown('</div>', unsafe_allow_html=True)
+
 
 # ────────────────────────────────────────────────────────────────────────────────
 # SECTION 3) ADD / EDIT / DELETE TASKS
@@ -677,7 +679,7 @@ with st.expander("📝 Add New Task", expanded=False):
             )
             pause_survey = st.checkbox("Pause Survey Operations", key="new_task_pause")
         with col2:
-            st.write("")  # empty right column for spacing
+            st.write("")  # padding column
             st.write("")
 
         add_task_btn = st.form_submit_button("Add Task")
@@ -722,7 +724,7 @@ for t in current_project.tasks:
                 f"""
                 <div class="card">
                   <strong><i class="fas fa-tasks"></i> {t.name}</strong> ({t.task_type})<br>
-                  <small>{t.start_date} → {t.end_date} | Vessel: {assigned_name}</small><br>
+                  <small>{t.start_date} &rarr; {t.end_date} | Vessel: {assigned_name}</small><br>
                   {("<small style='color:orange;'>⚠️ Pauses Survey</small>" if t.pause_survey else "")}
                 </div>
                 """,
@@ -823,7 +825,7 @@ if st.session_state.get("editing_task"):
                         key=f"edit_pause_{to_edit_t.id}"
                     )
                 with colE2:
-                    st.write("")
+                    st.write("")  # padding column
                     st.write("")
 
                 update_task_btn = st.form_submit_button("Update Task")
@@ -858,6 +860,7 @@ if st.session_state.get("editing_task"):
                         st.success(f"Task '{e_name.strip()}' updated!")
                         st.session_state["editing_task"] = None
             st.markdown('</div>', unsafe_allow_html=True)
+
 
 # ────────────────────────────────────────────────────────────────────────────────
 # SECTION 4) DATA MANAGEMENT (EXPORT / IMPORT)
@@ -1001,6 +1004,7 @@ with st.expander("💾 Export / Import Projects", expanded=False):
             except Exception as e:
                 st.error(f"Error importing: {e}")
 
+
 # ────────────────────────────────────────────────────────────────────────────────
 # SECTION 5) PROJECT TIMELINE (GANTT CHART)
 # ────────────────────────────────────────────────────────────────────────────────
@@ -1010,13 +1014,14 @@ proj = get_current_project()
 if proj is None:
     st.stop()
 
+
 def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
     rows = []
     for v in vessels:
         survey_start = pd.to_datetime(v.start_date)
         survey_end = pd.to_datetime(v.end_date)
 
-        # Gather any “pause” tasks for this vessel, sorted by start date
+        # Gather any pause‐tasks for this vessel, sorted by start date
         pauses = sorted(
             [t for t in tasks if (t.vessel_id == v.id and t.pause_survey)],
             key=lambda t: pd.to_datetime(t.start_date)
@@ -1026,6 +1031,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
         for t in pauses:
             t_start = pd.to_datetime(t.start_date)
             t_end = pd.to_datetime(t.end_date)
+            # 1) If there is a gap between last resume and next pause, draw that Survey segment:
             if t_start > cur_start:
                 rows.append({
                     "Task":     f"Survey ► {v.name}",
@@ -1034,6 +1040,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                     "Resource": v.name,
                     "Type":     "Survey"
                 })
+            # 2) Draw the pause task itself:
             rows.append({
                 "Task":     t.name,
                 "Start":    t_start,
@@ -1041,8 +1048,10 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                 "Resource": v.name,
                 "Type":     t.task_type
             })
+            # 3) Mark that after t_end, survey will resume:
             cur_start = t_end
 
+        # 4) Once all pause‐tasks are handled, if any survey time remains, draw final “Survey” piece:
         if cur_start < survey_end:
             rows.append({
                 "Task":     f"Survey ► {v.name}",
@@ -1052,7 +1061,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                 "Type":     "Survey"
             })
 
-    # Unassigned tasks
+    # 5) Unassigned tasks:
     for t in tasks:
         if t.vessel_id is None:
             rows.append({
@@ -1065,6 +1074,7 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
 
     return pd.DataFrame(rows)
 
+
 timeline_df = build_timeline_df(proj.vessels, proj.tasks)
 
 if timeline_df.empty:
@@ -1073,7 +1083,7 @@ if timeline_df.empty:
         unsafe_allow_html=True
     )
 else:
-    # Create Plotly Gantt chart with text inside bars
+    # Create Plotly Gantt chart with “text inside bars” and custom legend
     fig = px.timeline(
         timeline_df,
         x_start="Start",
@@ -1086,7 +1096,7 @@ else:
         text="Task",  # labels inside each bar
     )
 
-    # Reverse Y‐axis
+    # Reverse Y‐axis so top resource is first
     fig.update_yaxes(
         autorange="reversed",
         title_text="",
@@ -1094,7 +1104,7 @@ else:
         title_font=dict(color="#0B1D3A")
     )
 
-    # X‐axis formatting: ensure actual date ticks
+    # X‐axis (date) formatting: ensure actual date ticks are shown
     fig.update_xaxes(
         type="date",
         title_text="Date",
@@ -1104,36 +1114,25 @@ else:
         gridcolor="rgba(200,200,200,0.2)"
     )
 
-    # Draw “Today” line via add_shape + add_annotation (no add_vline anywhere)
-    today_str = datetime.date.today().isoformat()  # e.g. "2025-06-05"
-    fig.add_shape(
-        type="line",
-        x0=today_str,
-        x1=today_str,
-        y0=0,
-        y1=1,
-        xref="x",
-        yref="paper",
-        line=dict(color="#DB504A", dash="dash")
-    )
-    fig.add_annotation(
-        x=today_str,
-        y=1.02,
-        xref="x",
-        yref="paper",
-        text="Today",
-        showarrow=False,
-        font=dict(color="#DB504A", size=12)
+    # Draw a vertical “Today” line (dashed red) using the correct annotation dict
+    today = pd.to_datetime(datetime.date.today())
+    fig.add_vline(
+        x=today,
+        line_dash="dash",
+        line_color="#DB504A",
+        annotation_text="Today",
+        annotation_position="top left",
+        annotation=dict(font=dict(color="#DB504A", size=12))
     )
 
-    # Show text inside bars
+    # Update traces to show text inside each bar
     fig.update_traces(
         textfont=dict(color="#FFFFFF", size=12),
         textposition="inside",
         insidetextanchor="middle"
     )
 
-    # Legend styling: put it above the chart
+    # Legend placement, box style
     fig.update_layout(
         height=max(400, len(proj.vessels) * 100 + len(proj.tasks) * 50),
         plot_bgcolor="rgba(255,255,255,0)",
@@ -1155,4 +1154,5 @@ else:
         margin=dict(l=20, r=20, t=80, b=20)
     )
 
+    # Finally, display
     st.plotly_chart(fig, use_container_width=True)
