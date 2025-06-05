@@ -1110,15 +1110,17 @@ else:
         gridcolor="rgba(200,200,200,0.2)"
     )
 
-    # Draw a vertical “Today” line (dashed red) using the correct annotation dict
-    today = pd.to_datetime(datetime.date.today())
+    # Draw a vertical “Today” line (dashed red)
+    # Use a pure Python date so Plotly won’t error out
+    today = datetime.date.today()
     fig.add_vline(
         x=today,
         line_dash="dash",
         line_color="#DB504A",
         annotation_text="Today",
         annotation_position="top left",
-        annotation=dict(font=dict(color="#DB504A", size=12))
+        annotation_font_color="#DB504A",
+        annotation_font_size=12
     )
 
     # Update traces to show text inside each bar
