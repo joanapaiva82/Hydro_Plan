@@ -42,10 +42,11 @@ COLOR_MAP = {
 
 # ────────────────────────────────────────────────────────────────────────────────
 # CUSTOM CSS FOR:
+#   • FORCE st.info(...) TEXT TO WHITE
 #   • WHITE HEADER with NAVY text on DARK NAVY background
 #   • WHITE checkbox labels
 #   • BLACK text for “Add Vessel” / “Add Task” buttons
-#   • ALL other buttons are white‐text on a blue‐gradient
+#   • ALL other buttons (Create, Clear, Export, Edit, Delete) are white‐text on blue‐gradient
 # ────────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Hydrographic Survey Estimator",
@@ -57,6 +58,11 @@ st.markdown(
     """
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
+        /* 0. Force all st.info() text to white (overrides default gray) */
+        .stInfo * {
+            color: #FFFFFF !important;
+        }
+
         /* 1. Overall Dark-Navy Background & White Text */
         html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
             background: #0B1D3A;      /* very dark navy */
@@ -136,7 +142,7 @@ st.markdown(
         .add-form-button .stButton > button {
             background: #FFFFFF !important;  /* white button */
             color: #000000 !important;       /* black text */
-            border: 1px solid #DB504A !important;  /* optional red border to match earlier screenshots */
+            border: 1px solid #DB504A !important;  /* subtle red border */
             font-weight: 600;
             padding: 12px 24px !important;
             border-radius: 6px !important;
@@ -146,7 +152,7 @@ st.markdown(
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
-        /*    b) All other standard buttons (e.g. “Create Project”, “Export to JSON”): white text on gradient */
+        /*    b) All other standard buttons (e.g. “Create Project”, “Clear Project”, “Export to JSON”): white text on gradient */
         .stButton > button {
             background: linear-gradient(135deg, #1E40AF, #3B82F6) !important;
             color: #FFFFFF !important;
@@ -445,7 +451,7 @@ with st.expander("🚢 Add New Vessel", expanded=False):
         vcol1, vcol2 = st.columns([3, 2])
         with vcol1:
             vessel_name = st.text_input("Vessel Name*", placeholder="e.g. Orca Explorer")
-            # Default must be >= min_value, so use 0.1
+            # Default must be ≥ min_value, so use 0.1
             vessel_km = st.number_input("Line Km for this Vessel*", min_value=0.1, step=1.0, value=0.1)
             start_date = st.date_input("Start Date*", value=datetime.date.today())
         with vcol2:
@@ -589,6 +595,7 @@ if current_project.vessels:
                     st.success(f"Deleted vessel '{v.name}'.")
                     safe_rerun()
 else:
+    # “No vessels added…” message forced white by the CSS rule above
     st.info("No vessels added yet to this project.")
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -771,6 +778,7 @@ if current_project.tasks:
                     st.success(f"Deleted task '{t.name}'.")
                     safe_rerun()
 else:
+    # “No tasks added…” message forced white by the CSS rule above
     st.info("No tasks added yet to this project.")
 
 # ────────────────────────────────────────────────────────────────────────────────
