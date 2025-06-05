@@ -10,7 +10,7 @@ from typing import List, Dict, Optional
 # ────────────────────────────────────────────────────────────────────────────────
 # CONSTANTS & COLOR MAP
 # ────────────────────────────────────────────────────────────────────────────────
-DEFAULT_SURVEY_SPEED = 5.0  # Knots (not shown but reserved if needed)
+DEFAULT_SURVEY_SPEED = 5.0  # knots (used to calculate survey days)
 COLOR_MAP = {
     "Survey": "#2E86AB",
     "Maintenance": "#A23B72",
@@ -24,40 +24,42 @@ COLOR_MAP = {
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
-# CUSTOM CSS FOR DARK NAVY THEME & LAYOUT
+# CUSTOM CSS FOR WHITE HEADER AND NAVY TITLE + DARK BACKGROUND
 # ────────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Hydrographic Survey Estimator",
     layout="wide",
     page_icon="🌊"
 )
+
 st.markdown("""
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        /* 1. Overall Dark-Nav Background & White Text */
+        /* 1. Overall Dark-Navy Background & White Text */
         html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
-            background: #0B1D3A;      /* Very dark navy */
-            color: #FFFFFF;           /* Always white text */
+            background: #0B1D3A;      /* very dark navy */
+            color: #FFFFFF;           /* white text */
             font-family: 'Arial', sans-serif;
         }
 
-        /* 2. Header Styling */
+        /* 2. Header Styling (white background + navy-blue text) */
         .stHeader {
             width: 100%;
-            background: linear-gradient(135deg, #1E40AF, #3B82F6);
+            background: #FFFFFF;            /* white box */
             padding: 25px 40px;
             margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
             border-radius: 8px;
         }
         .stHeader h1 {
             margin: 0;
             font-size: 2.5rem;
-            color: #FFFFFF;
+            color: #0B1D3A;                 /* navy-blue text */
             text-align: center;
+            font-weight: 600;
         }
 
-        /* 3. Project Selector & Containers */
+        /* 3. Project Selector Styling */
         .project-selectbox > label {
             color: #FFFFFF !important;
             font-size: 1rem;
@@ -94,15 +96,15 @@ st.markdown("""
         .stNumberInput input[type="number"],
         .stDateInput input[type="text"],
         .stSelectbox select {
-            background: #F5F5F5 !important;  /* Light gray */
-            color: #000000 !important;        /* Black text inside */
+            background: #F5F5F5 !important;  /* light gray */
+            color: #000000 !important;        /* black text inside */
             border: none !important;
             border-radius: 6px !important;
             padding: 8px !important;
             width: 100% !important;
         }
 
-        /* 6. Buttons */
+        /* 6. Button Styling */
         .stButton > button {
             background: linear-gradient(135deg, #1E40AF, #3B82F6) !important;
             color: #FFFFFF !important;
@@ -172,6 +174,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────────────────────────────────────
+# RERUN HELPER: use st.rerun() instead of experimental_rerun()
+# ────────────────────────────────────────────────────────────────────────────────
+def safe_rerun():
+    st.rerun()
+
+# ────────────────────────────────────────────────────────────────────────────────
 # DATA MODELS
 # ────────────────────────────────────────────────────────────────────────────────
 class Vessel:
@@ -190,32 +198,26 @@ class Vessel:
     ):
         self.id = id or str(uuid4())
         self.name = name
-        # "vessel_km" = how many line‐km this vessel surveys
         self.vessel_km = vessel_km
         self.start_date = start_date
 
-        # User can specify transit/weather/maintenance in days or hours.
-        # We will store everything internally in “days” as a float.
+        # Convert to days if unit is hours
         self.transit_days = self._convert_to_days(transit, transit_unit)
         self.weather_days = self._convert_to_days(weather, weather_unit)
         self.maintenance_days = self._convert_to_days(maintenance, maintenance_unit)
 
-        # Survey days = (vessel_km) / (speed*24). For now, we assume 5 knots as an example.
+        # Survey days = (vessel_km) / (speed * 24)
         self.survey_days = round(self.vessel_km / (DEFAULT_SURVEY_SPEED * 24), 2)
-
-        # Total days = survey + transit + weather + maintenance
         self.total_days = round(
             self.survey_days + self.transit_days + self.weather_days + self.maintenance_days, 2
         )
-        # End date = start_date + total_days (rounded up to nearest day for scheduling)
         self.end_date = self.start_date + datetime.timedelta(days=self.total_days)
 
     def _convert_to_days(self, val: float, unit: str) -> float:
-        """If unit is 'hours', convert to days (val/24). Otherwise return val as days."""
         if unit == "hours":
             return round(val / 24, 2)
         else:
-            return val  # Already in days
+            return val
 
     def to_dict(self) -> Dict:
         return {
@@ -233,18 +235,17 @@ class Vessel:
 
     @staticmethod
     def from_dict(d: Dict) -> "Vessel":
-        # When loading from JSON/Excel, reconstruct a Vessel
         v = Vessel(
             name=d["name"],
             vessel_km=float(d["vessel_km"]),
             start_date=pd.to_datetime(d["start_date"]).date(),
             transit=float(d["transit_days"]),
-            transit_unit="days",    # already stored in days
+            transit_unit="days",
             weather=float(d["weather_days"]),
             weather_unit="days",
             maintenance=float(d["maintenance_days"]),
             maintenance_unit="days",
-            id=d["id"]
+            id=d["id"],
         )
         return v
 
@@ -264,7 +265,7 @@ class Task:
         self.task_type = task_type
         self.start_date = start_date
         self.end_date = end_date
-        self.vessel_id = vessel_id  # Which vessel this task belongs to (if any)
+        self.vessel_id = vessel_id
         self.pause_survey = pause_survey
 
     def to_dict(self) -> Dict:
@@ -324,7 +325,6 @@ class Project:
             infill_pct=float(d["infill_pct"]),
             id=d["id"]
         )
-        # Reconstruct vessels & tasks
         p.vessels = [Vessel.from_dict(v) for v in d.get("vessels", [])]
         p.tasks = [Task.from_dict(t) for t in d.get("tasks", [])]
         return p
@@ -340,31 +340,24 @@ def init_session_state():
 
 init_session_state()
 
-# Helper to find the Project object given an ID
 def get_current_project() -> Optional[Project]:
     pid = st.session_state["current_project_id"]
     if pid is None:
         return None
-    for proj in st.session_state["projects"]:
-        if proj.id == pid:
-            return proj
+    for p in st.session_state["projects"]:
+        if p.id == pid:
+            return p
     return None
-
-# Helper to refresh (re-run) after state changes
-def safe_rerun():
-    st.experimental_rerun()
 
 # ────────────────────────────────────────────────────────────────────────────────
 # SECTION 1) PROJECT CREATION / SELECTION
 # ────────────────────────────────────────────────────────────────────────────────
-st.markdown('<div class="stHeader"><h1><i class="fas fa-water"></i> Hydrographic Survey Estimator</h1></div>',
-            unsafe_allow_html=True)
+st.markdown('<div class="stHeader"><h1><i class="fas fa-water"></i> Hydrographic Survey Estimator</h1></div>', unsafe_allow_html=True)
 
 st.markdown('<div class="section-header">1) Create / Select Project</div>', unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns([2, 2, 1])
 with col1:
-    # Dropdown to pick an existing project or “+ New Project”
     project_names = [p.name for p in st.session_state["projects"]]
     project_options = ["➕ New Project"] + project_names
     sel = st.selectbox(
@@ -374,29 +367,21 @@ with col1:
             get_current_project().name
         ) + 1,
         key="project_select",
-        label_visibility="visible",
     )
 with col2:
     if sel == "➕ New Project":
-        # Show inputs for a brand‐new project
         new_name = st.text_input("New Project Name", value="", placeholder="e.g. Gulf Survey 2025")
-        new_line_km = st.number_input(
-            "Total Line Km to Survey", min_value=0.0, step=1.0, value=0.0
-        )
-        new_infill = st.number_input(
-            "Infill %", min_value=0.0, max_value=100.0, step=1.0, value=0.0
-        )
+        new_line_km = st.number_input("Total Line Km to Survey", min_value=0.0, step=1.0, value=0.0)
+        new_infill = st.number_input("Infill %", min_value=0.0, max_value=100.0, step=1.0, value=0.0)
         if st.button("Create Project"):
             if not new_name.strip():
                 st.error("Project name cannot be empty.")
             else:
-                # Append a new Project
                 proj = Project(name=new_name.strip(), total_line_km=new_line_km, infill_pct=new_infill)
                 st.session_state["projects"].append(proj)
                 st.session_state["current_project_id"] = proj.id
                 safe_rerun()
     else:
-        # If an existing project is selected, set current_project_id accordingly
         chosen = sel
         for p in st.session_state["projects"]:
             if p.name == chosen:
@@ -406,20 +391,17 @@ with col2:
 
 with col3:
     if st.button("🔄 Refresh Projects"):
-        # Just forces a rerun (e.g. if you externally changed state)
         safe_rerun()
 
-# If no project yet, just ask user to create one
 current_project = get_current_project()
 if current_project is None:
-    st.info("No project selected. Create a new project in Section 1 to get started.")
+    st.info("No project selected. Create a new project above to begin.")
     st.stop()
 
 # ────────────────────────────────────────────────────────────────────────────────
 # SECTION 2) ADD / EDIT / DELETE VESSELS
 # ────────────────────────────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">2) Vessel Fleet (for “{}”)</div>'.format(current_project.name),
-            unsafe_allow_html=True)
+st.markdown(f'<div class="section-header">2) Vessel Fleet (for “{current_project.name}”)</div>', unsafe_allow_html=True)
 
 with st.expander("🚢 Add New Vessel", expanded=False):
     with st.form("vessel_form"):
@@ -427,18 +409,12 @@ with st.expander("🚢 Add New Vessel", expanded=False):
         with vcol1:
             vessel_name = st.text_input("Vessel Name*", placeholder="e.g. Orca Explorer")
             vessel_km = st.number_input("Line Km for this Vessel*", min_value=0.1, step=1.0, value=0.0)
-            start_date = st.date_input(
-                "Start Date*",
-                value=datetime.date.today()
-            )
+            start_date = st.date_input("Start Date*", value=datetime.date.today())
         with vcol2:
-            # Transit
             transit_val = st.number_input("Transit Duration*", min_value=0.0, step=0.5, value=0.0, key="transit_val")
             transit_unit = st.selectbox("Unit", ["days", "hours"], index=0, key="transit_unit")
-            # Weather
             weather_val = st.number_input("Weather Downtime*", min_value=0.0, step=0.5, value=0.0, key="weather_val")
             weather_unit = st.selectbox("Unit", ["days", "hours"], index=0, key="weather_unit")
-            # Maintenance
             maintenance_val = st.number_input("Maintenance*", min_value=0.0, step=0.5, value=0.0, key="maintenance_val")
             maintenance_unit = st.selectbox("Unit", ["days", "hours"], index=0, key="maintenance_unit")
 
@@ -464,12 +440,10 @@ with st.expander("🚢 Add New Vessel", expanded=False):
                     maintenance=maintenance_val,
                     maintenance_unit=maintenance_unit,
                 )
-                # Append to current project
                 current_project.vessels.append(new_v)
                 st.success(f"Vessel '{vessel_name}' added to project '{current_project.name}'!")
                 safe_rerun()
 
-# Show existing vessels in a scrollable list
 if current_project.vessels:
     for v in current_project.vessels:
         with st.container():
@@ -488,7 +462,6 @@ if current_project.vessels:
                 """, unsafe_allow_html=True)
             with c2:
                 if st.button("✏️ Edit", key=f"edit_v_{v.id}"):
-                    # Prefill an edit form in an expander
                     with st.expander(f"✏️ Edit Vessel: {v.name}", expanded=True):
                         with st.form(f"vessel_edit_form_{v.id}"):
                             ev1, ev2 = st.columns([3, 2])
@@ -497,9 +470,8 @@ if current_project.vessels:
                                 new_km = st.number_input("Line Km*", min_value=0.1, step=1.0, value=v.vessel_km)
                                 new_start = st.date_input("Start Date*", value=pd.to_datetime(v.start_date).date())
                             with ev2:
-                                # Convert back to hours/days to prefill
-                                # If any of the stored days values were fractional, show in days
-                                new_transit = v.transit_days * 24 if False else v.transit_days
+                                # Prefill with stored days values
+                                new_transit = v.transit_days
                                 new_transit_unit = "days"
                                 new_weather = v.weather_days
                                 new_weather_unit = "days"
@@ -513,28 +485,34 @@ if current_project.vessels:
                                 new_maint_unit = st.selectbox("Unit", ["days","hours"], index=0, key=f"em_{v.id}_munit")
 
                             if st.form_submit_button("Update Vessel"):
-                                # Replace the vessel in the list
-                                updated_v = Vessel(
-                                    name=new_name.strip(),
-                                    vessel_km=new_km,
-                                    start_date=new_start,
-                                    transit=new_transit,
-                                    transit_unit=new_transit_unit,
-                                    weather=new_weather,
-                                    weather_unit=new_weather_unit,
-                                    maintenance=new_maint,
-                                    maintenance_unit=new_maint_unit,
-                                    id=v.id  # Preserve ID
-                                )
-                                # Remove old, insert updated
-                                current_project.vessels = [x for x in current_project.vessels if x.id != v.id]
-                                current_project.vessels.append(updated_v)
-                                st.success(f"Vessel '{new_name}' updated successfully!")
-                                safe_rerun()
+                                errs = []
+                                if not new_name.strip():
+                                    errs.append("Vessel name cannot be empty.")
+                                if new_km <= 0:
+                                    errs.append("Line Km must be positive.")
+                                if errs:
+                                    for e in errs:
+                                        st.error(e)
+                                else:
+                                    updated_v = Vessel(
+                                        name=new_name.strip(),
+                                        vessel_km=new_km,
+                                        start_date=new_start,
+                                        transit=new_transit,
+                                        transit_unit=new_transit_unit,
+                                        weather=new_weather,
+                                        weather_unit=new_weather_unit,
+                                        maintenance=new_maint,
+                                        maintenance_unit=new_maint_unit,
+                                        id=v.id
+                                    )
+                                    current_project.vessels = [x for x in current_project.vessels if x.id != v.id]
+                                    current_project.vessels.append(updated_v)
+                                    st.success(f"Vessel '{new_name}' updated successfully!")
+                                    safe_rerun()
             with c3:
                 if st.button("🗑️ Delete", key=f"del_v_{v.id}"):
                     current_project.vessels = [x for x in current_project.vessels if x.id != v.id]
-                    # Also delete any tasks that were assigned to this vessel
                     current_project.tasks = [t for t in current_project.tasks if t.vessel_id != v.id]
                     st.success(f"Deleted vessel '{v.name}'.")
                     safe_rerun()
@@ -544,8 +522,7 @@ else:
 # ────────────────────────────────────────────────────────────────────────────────
 # SECTION 3) ADD / EDIT / DELETE TASKS
 # ────────────────────────────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">3) Task Register (for “{}”)</div>'.format(current_project.name),
-            unsafe_allow_html=True)
+st.markdown(f'<div class="section-header">3) Task Register (for “{current_project.name}”)</div>', unsafe_allow_html=True)
 
 with st.expander("📝 Add New Task", expanded=False):
     with st.form("task_form"):
@@ -572,7 +549,6 @@ with st.expander("📝 Add New Task", expanded=False):
             pause_survey = st.checkbox("Pause Survey Operations", value=False)
 
         if st.form_submit_button("Add Task"):
-            # Validation
             errors = []
             if not task_name.strip():
                 errors.append("Task name cannot be empty.")
@@ -580,7 +556,6 @@ with st.expander("📝 Add New Task", expanded=False):
             ed = end_date_t
             if sd > ed:
                 errors.append("End date must be on or after start date.")
-            # If "Other" but user left it blank:
             chosen_type = task_type if task_type != "Other" else other_label.strip()
             if task_type == "Other" and not chosen_type:
                 errors.append("You selected “Other”. Please specify the task type.")
@@ -600,7 +575,6 @@ with st.expander("📝 Add New Task", expanded=False):
                 st.success(f"Task '{task_name}' added successfully!")
                 safe_rerun()
 
-# Show existing tasks with edit/delete
 if current_project.tasks:
     for t in current_project.tasks:
         with st.container():
@@ -624,7 +598,7 @@ if current_project.tasks:
                                 new_type = st.selectbox(
                                     "Task Type*",
                                     options=["Survey", "Maintenance", "Weather", "Transit", "Delay", "Sediment Sample", "Deployment", "Recovery", "Other"],
-                                    index=(["Survey","Maintenance","Weather","Transit","Delay","Sediment Sample","Deployment","Recovery","Other"].index(t.task_type)
+                                    index=(["Survey","Maintenance","Weather","Transit","Delay","Sediment Sample","Deployment","Recovery"].index(t.task_type)
                                            if t.task_type in ["Survey","Maintenance","Weather","Transit","Delay","Sediment Sample","Deployment","Recovery"]
                                            else 8),
                                     key=f"et_ttype_{t.id}"
@@ -635,7 +609,6 @@ if current_project.tasks:
                                 new_start = st.date_input("Start Date*", value=t.start_date, key=f"et_start_{t.id}")
                                 new_end = st.date_input("End Date*", value=t.end_date, key=f"et_end_{t.id}")
                                 vessel_options_edit = [("Unassigned", None)] + [(v.name, v.id) for v in current_project.vessels]
-                                # Compute default index
                                 default_idx = 0
                                 for i, opt in enumerate(vessel_options_edit):
                                     if opt[1] == t.vessel_id:
@@ -651,16 +624,16 @@ if current_project.tasks:
                                 new_pause = st.checkbox("Pause Survey Operations", value=t.pause_survey, key=f"et_pause_{t.id}")
 
                             if st.form_submit_button("Update Task"):
-                                e2 = []
+                                errs = []
                                 if not new_name.strip():
-                                    e2.append("Task name cannot be empty.")
+                                    errs.append("Task name cannot be empty.")
                                 if new_start > new_end:
-                                    e2.append("End date must be on or after start date.")
+                                    errs.append("End date must be on or after start date.")
                                 chosen_t = new_type if new_type != "Other" else new_other.strip()
                                 if new_type == "Other" and not chosen_t:
-                                    e2.append("You selected “Other”. Please specify the task type.")
-                                if e2:
-                                    for e in e2:
+                                    errs.append("You selected “Other”. Please specify the task type.")
+                                if errs:
+                                    for e in errs:
                                         st.error(e)
                                 else:
                                     updated_t = Task(
@@ -672,7 +645,6 @@ if current_project.tasks:
                                         pause_survey=new_pause,
                                         id=t.id
                                     )
-                                    # Replace in list
                                     current_project.tasks = [x for x in current_project.tasks if x.id != t.id]
                                     current_project.tasks.append(updated_t)
                                     st.success(f"Task '{new_name}' updated!")
@@ -686,7 +658,7 @@ else:
     st.info("No tasks added yet to this project.")
 
 # ────────────────────────────────────────────────────────────────────────────────
-# SECTION 4) DATA MANAGEMENT (EXPORT/IMPORT)
+# SECTION 4) DATA MANAGEMENT (EXPORT / IMPORT)
 # ────────────────────────────────────────────────────────────────────────────────
 st.markdown('<div class="section-header">4) Data Management</div>', unsafe_allow_html=True)
 
@@ -708,12 +680,7 @@ with st.expander("💾 Export / Import Projects", expanded=False):
             )
         if st.button("Export to Excel"):
             output = BytesIO()
-            # We will create three sheets: 
-            #   1) Projects (basic project info), 
-            #   2) Vessels (project_id + vessel fields), 
-            #   3) Tasks (project_id + task fields).
             with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                # Projects sheet
                 proj_rows = []
                 for p in st.session_state["projects"]:
                     proj_rows.append({
@@ -724,7 +691,6 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                     })
                 pd.DataFrame(proj_rows).to_excel(writer, sheet_name="Projects", index=False)
 
-                # Vessels sheet
                 vessel_rows = []
                 for p in st.session_state["projects"]:
                     for v in p.vessels:
@@ -734,7 +700,6 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                 if vessel_rows:
                     pd.DataFrame(vessel_rows).to_excel(writer, sheet_name="Vessels", index=False)
 
-                # Tasks sheet
                 task_rows = []
                 for p in st.session_state["projects"]:
                     for t in p.tasks:
@@ -766,7 +731,6 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                     proj_dicts = data_in.get("projects", [])
                     new_projects = [Project.from_dict(d) for d in proj_dicts]
                     st.session_state["projects"] = new_projects
-                    # Reset current project to first one
                     if new_projects:
                         st.session_state["current_project_id"] = new_projects[0].id
                     else:
@@ -776,7 +740,6 @@ with st.expander("💾 Export / Import Projects", expanded=False):
 
                 elif uploaded_file.name.lower().endswith(".xlsx"):
                     xls = pd.ExcelFile(uploaded_file)
-                    # Read Projects
                     if "Projects" not in xls.sheet_names:
                         raise ValueError("Excel must contain a sheet named 'Projects'.")
                     proj_df = xls.parse("Projects")
@@ -790,7 +753,6 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                         )
                         new_projects.append(p)
 
-                    # Read Vessels if present
                     if "Vessels" in xls.sheet_names:
                         ves_df = xls.parse("Vessels")
                         for idx, row in ves_df.iterrows():
@@ -809,7 +771,6 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                                     p.vessels.append(v)
                                     break
 
-                    # Read Tasks if present
                     if "Tasks" in xls.sheet_names:
                         task_df = xls.parse("Tasks")
                         for idx, row in task_df.iterrows():
@@ -850,10 +811,8 @@ if proj is None:
     st.info("No project selected; cannot display Gantt.")
     st.stop()
 
-# Build the timeline DataFrame for Plotly
 def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
     rows = []
-    # First, for each vessel, break its survey into segments around any "pause_survey" tasks
     for v in vessels:
         survey_start = pd.to_datetime(v.start_date)
         survey_end = pd.to_datetime(v.end_date)
@@ -867,7 +826,6 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
         for t in pauses:
             t_start = pd.to_datetime(t.start_date)
             t_end = pd.to_datetime(t.end_date)
-            # If there's a survey segment before this pause
             if t_start > cur_start:
                 rows.append({
                     "Task": f"Survey ► {v.name}",
@@ -876,7 +834,6 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                     "Resource": v.name,
                     "Type": "Survey"
                 })
-            # Insert the pause task itself
             rows.append({
                 "Task": t.name,
                 "Start": t_start,
@@ -885,7 +842,6 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                 "Type": t.task_type
             })
             cur_start = t_end
-        # After all pauses, if there's any survey segment left
         if cur_start < survey_end:
             rows.append({
                 "Task": f"Survey ► {v.name}",
@@ -895,7 +851,6 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
                 "Type": "Survey"
             })
 
-    # Add any unassigned tasks (tasks with vessel_id = None)
     for t in tasks:
         if t.vessel_id is None:
             rows.append({
