@@ -996,17 +996,25 @@ with st.expander("💾 Export / Import Projects", expanded=False):
 # ────────────────────────────────────────────────────────────────────────────────
 # SECTION 5) PROJECT TIMELINE (GANTT CHART)
 # ────────────────────────────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">5) Project Timeline (Gantt Chart)</div>', unsafe_allow_html=True)
+import plotly.graph_objects as go
+
+st.markdown(
+    '<div class="section-header">5) Project Timeline (Gantt Chart)</div>', 
+    unsafe_allow_html=True
+)
 
 proj = get_current_project()
 if proj is None:
     st.stop()
 
+# ────────────────────────────────────────────────────────────────────────────────
+# 5.a) Build the timeline DataFrame exactly as before
+# ────────────────────────────────────────────────────────────────────────────────
 def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
     rows = []
     for v in vessels:
         survey_start = pd.to_datetime(v.start_date)
-        survey_end = pd.to_datetime(v.end_date)
+        survey_end   = pd.to_datetime(v.end_date)
 
         # Gather any “pause” tasks for this vessel
         pauses = sorted(
@@ -1014,113 +1022,262 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
             key=lambda t: pd.to_datetime(t.start_date)
         )
 
-        cur_start = survey_start
+        current_start = survey_start
         for t in pauses:
             t_start = pd.to_datetime(t.start_date)
-            t_end = pd.to_datetime(t.end_date)
-            if t_start > cur_start:
+            t_end   = pd.to_datetime(t.end_date)
+
+            # 1) A “survey” segment up to the pause
+            if t_start > current_start:
                 rows.append({
-                    "Task": f"Survey ► {v.name}",
-                    "Start": cur_start,
-                    "Finish": t_start,
                     "Resource": v.name,
-                    "Type": "Survey"
+                    "Task":     f"Survey → {v.name}",
+                    "Type":     "Survey",
+                    "Start":    current_start,
+                    "Finish":   t_start
                 })
+            # 2) The “pause” segment (e.g. Sediment Sample, Weather, etc.)
             rows.append({
-                "Task": t.name,
-                "Start": t_start,
-                "Finish": t_end,
                 "Resource": v.name,
-                "Type": t.task_type
+                "Task":     t.name,
+                "Type":     t.task_type,
+                "Start":    t_start,
+                "Finish":   t_end
             })
-            cur_start = t_end
+            current_start = t_end
 
-        if cur_start < survey_end:
+        # If anything remains after the last pause, draw the final “survey”
+        if current_start < survey_end:
             rows.append({
-                "Task": f"Survey ► {v.name}",
-                "Start": cur_start,
-                "Finish": survey_end,
                 "Resource": v.name,
-                "Type": "Survey"
+                "Task":     f"Survey → {v.name}",
+                "Type":     "Survey",
+                "Start":    current_start,
+                "Finish":   survey_end
             })
 
-    # Unassigned tasks (no vessel)
+    # Unassigned tasks (will appear in their own “Unassigned” row)
     for t in tasks:
         if t.vessel_id is None:
             rows.append({
-                "Task": t.name,
-                "Start": pd.to_datetime(t.start_date),
-                "Finish": pd.to_datetime(t.end_date),
                 "Resource": "Unassigned",
-                "Type": t.task_type
+                "Task":     t.name,
+                "Type":     t.task_type,
+                "Start":    pd.to_datetime(t.start_date),
+                "Finish":   pd.to_datetime(t.end_date)
             })
 
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        # Force sorting by “Resource” so that all bars for Vessel A appear before Vessel B, etc.
+        df["Resource"] = pd.Categorical(df["Resource"], categories=sorted(df["Resource"].unique()), ordered=True)
+        df = df.sort_values(["Resource", "Start"])
+    return df
 
 timeline_df = build_timeline_df(proj.vessels, proj.tasks)
 
 if timeline_df.empty:
     st.markdown(
-        '<span style="color:#FFFFFF;">No timeline data available for this project. Add vessels/tasks above.</span>',
+        '<span style="color:#FFFFFF;">No timeline data available for this project. Add vessels / tasks above.</span>',
         unsafe_allow_html=True
     )
-else:
-    # Create the Plotly timeline
-    fig = px.timeline(
-        timeline_df,
-        x_start="Start",
-        x_end="Finish",
-        y="Resource",
-        color="Type",
-        color_discrete_map=COLOR_MAP,
-        hover_name="Task",
-        title=f"Gantt Chart ► {proj.name}"
+    st.stop()
+
+# ────────────────────────────────────────────────────────────────────────────────
+# 5.b) Define “milestones” – example: (these could come from your data model or be hard‐coded)
+# ────────────────────────────────────────────────────────────────────────────────
+# In a real application, you might store milestone dates in the Project object.
+# Here we’ll demonstrate with four fixed dates—just like your example image:
+milestones = [
+    {"date": "2023-08-01", "label": "Milestone 1"},
+    {"date": "2024-01-17", "label": "Milestone 2"},
+    {"date": "2024-05-01", "label": "Milestone 3"},
+    {"date": "2024-07-01", "label": "Milestone 4"},
+]
+# Convert to Timestamp so Plotly can place them correctly:
+for m in milestones:
+    m["ts"] = pd.to_datetime(m["date"])
+
+# ────────────────────────────────────────────────────────────────────────────────
+# 5.c) Build a Plotly Figure by hand (go.Figure) so that we can layer:
+#       • alternating background “lanes” (white vs. light‐gray) for each resource
+#       • small month‐bars along the top
+#       • vertical milestone triangles
+#       • the “today” line
+#       • properly colored bars for each Type
+# ────────────────────────────────────────────────────────────────────────────────
+
+from calendar import month_abbr
+
+# 1) Figure scaffolding
+fig = go.Figure()
+
+# 2) Determine unique resources (vessel names + “Unassigned”) and their vertical positions
+resources = list(timeline_df["Resource"].cat.categories)
+n_rows = len(resources)
+
+# We’ll assign each resource a Y‐position: 0, 1, 2, … up to (n_rows−1), then invert the axis later.
+# But for easier plotting of background shapes, let’s treat each row as: row_index ± 0.4 as vertical span.
+row_positions = { r: i for i, r in enumerate(resources) }
+
+# 3) Draw alternating “striped” background lanes (white → very light gray) for readability
+for r, idx in row_positions.items():
+    # Every even‐indexed row = white, every odd‐indexed row = #F2F2F2
+    lane_color = "#F2F2F2" if (idx % 2) else "#FFFFFF"
+    fig.add_shape(
+        type="rect",
+        xref="x",
+        yref="y",
+        x0=timeline_df["Start"].min() - pd.Timedelta(days=7),  # extend a bit left
+        x1=timeline_df["Finish"].max() + pd.Timedelta(days=7),  # extend a bit right
+        y0=idx - 0.4,
+        y1=idx + 0.4,
+        fillcolor=lane_color,
+        line_width=0,
+        layer="below"
     )
 
-    # ─────────────────────────────────────────────────────────────────────────────
-    # Tweak Y‐axis so that it is always categorical, hide grid lines, dark‐navy ticks
-    # ─────────────────────────────────────────────────────────────────────────────
-    fig.update_yaxes(
-        autorange="reversed",        # show the top resource first
-        type="category",              # force category even if single resource
-        showgrid=False,               # turn off horizontal grid lines
-        tickfont=dict(color="#0B1D3A", size=12),
-        title_text=""                 # no Y‐axis title
+# 4) Draw the month bars at the top (like a “mini‐Gantt‐header”)
+# Find the full min/max range of your timeline:
+overall_start = timeline_df["Start"].min().floor("D")
+overall_end   = timeline_df["Finish"].max().ceil("D")
+# Build a month‐by‐month frame from overall_start → overall_end
+all_months = pd.date_range(overall_start, overall_end, freq="MS")
+
+for i, month_start in enumerate(all_months):
+    month_end = (month_start + pd.offsets.MonthEnd(1))
+    # Light‐blue shading for alternating months, transparent otherwise
+    month_color = "#BFD7EA" if (i % 2) else "#DCEAF6"
+    fig.add_shape(
+        type="rect",
+        xref="x",
+        yref="paper",
+        x0=month_start,
+        x1=month_end,
+        y0=1.00,    # top of paper
+        y1=1.03,    # slight strip above top
+        fillcolor=month_color,
+        line_width=0,
+        layer="above"
+    )
+    # Month label
+    fig.add_annotation(
+        x=month_start + (month_end - month_start) / 2,
+        y=1.035,
+        xref="x",
+        yref="paper",
+        text=month_abbr[month_start.month],
+        showarrow=False,
+        font=dict(color="#0B1D3A", size=12, family="Arial"),
+        align="center"
     )
 
-    # ─────────────────────────────────────────────────────────────────────────────
-    # Tweak X‐axis: dark‐navy ticks, no grid lines or minimal grid
-    # ─────────────────────────────────────────────────────────────────────────────
-    fig.update_xaxes(
-        title_text="Date",
-        tickfont=dict(color="#0B1D3A", size=12),
-        title_font=dict(color="#0B1D3A", size=14),
-        showgrid=False                 # remove vertical grid lines
-    )
-
-    # ─────────────────────────────────────────────────────────────────────────────
-    # Overall layout adjustments: white plot area, transparent “paper” background,
-    # dark‐navy title/legend, and a small margin so it’s never clipped
-    # ─────────────────────────────────────────────────────────────────────────────
-    fig.update_layout(
-        height=max(400, len(proj.vessels)*100 + len(proj.tasks)*50),
-        plot_bgcolor="white",         # pure white inside the chart
-        paper_bgcolor="rgba(0,0,0,0)", # transparent around the chart
-        font_color="#0B1D3A",          # dark‐navy for all text by default
-        title=dict(
-            text=f"Gantt Chart ► {proj.name}",
-            font=dict(color="#0B1D3A", size=20),
-            x=0.02                       # left‐align title slightly
+# 5) Draw milestone markers (little red triangles + text)
+for m in milestones:
+    fig.add_shape(
+        type="path",
+        path=(
+            f"M {m['ts']}, {n_rows - 0.15} "                 # Move to bottom‐point of triangle
+            f"L {m['ts'] - pd.Timedelta(days=3)}, {n_rows + 0.20} "   # Line to top‐left
+            f"L {m['ts'] + pd.Timedelta(days=3)}, {n_rows + 0.20} Z"   # Line to top‐right & close
         ),
-        margin=dict(l=40, r=20, t=60, b=40),  # some breathing room
-        legend_title_text="Activity Type",
-        legend=dict(font=dict(color="#0B1D3A", size=12)),
-        hoverlabel=dict(
-            bgcolor="rgba(30, 64, 175, 0.8)",
-            font_size=12,
-            font_family="Arial"
+        fillcolor="#DB504A",
+        line_color="#DB504A",
+        layer="above"
+    )
+    # Milestone label above the triangle
+    fig.add_annotation(
+        x=m["ts"],
+        y=n_rows + 0.30,
+        xref="x",
+        yref="y",
+        text=m["label"],
+        showarrow=False,
+        font=dict(color="#0B1D3A", size=11, family="Arial"),
+        align="center"
+    )
+
+# 6) Draw the “Today” vertical line (bold red)
+today_ts = pd.to_datetime(datetime.date.today())
+if overall_start <= today_ts <= overall_end:
+    fig.add_shape(
+        type="line",
+        x0=today_ts,
+        x1=today_ts,
+        y0=-0.5,
+        y1=n_rows - 0.5,
+        xref="x",
+        yref="y",
+        line=dict(color="#DB504A", width=2, dash="dash"),
+        layer="above"
+    )
+    fig.add_annotation(
+        x=today_ts,
+        y=n_rows - 0.25,
+        xref="x",
+        yref="y",
+        text="Today",
+        showarrow=False,
+        font=dict(color="#DB504A", size=10, family="Arial"),
+        textangle=-90,
+        align="center"
+    )
+
+# 7) Plot each bar segment (one trace per “Type” for color grouping)
+#    We’ll iterate through timeline_df row by row and add a single bar for each.
+for _, row in timeline_df.iterrows():
+    y_idx = row_positions[row["Resource"]]
+    # Choose the correct color:
+    bar_color = COLOR_MAP.get(row["Type"], COLOR_MAP["Other"])
+    fig.add_trace(
+        go.Bar(
+            x=[(row["Finish"] - row["Start"]).days],
+            y=[n_rows - 1 - y_idx],  # invert y so that idx=0 is top
+            base=[row["Start"]],
+            orientation="h",
+            marker_color=bar_color,
+            marker_line_width=0,
+            width=0.5,
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"  # task name
+                + "Type: %{customdata[1]}<br>"
+                + "Start: %{base|%Y-%m-%d}<br>"
+                + "Finish: %{x|%Y-%m-%d}<br>"
+                + "<extra></extra>"
+            ),
+            customdata=[[row["Task"], row["Type"]]]
         )
     )
 
-    # Finally render it
-    st.plotly_chart(fig, use_container_width=True)
+# 8) Final layout tweaks: axes, sizing, fonts
+fig.update_yaxes(
+    tickmode="array",
+    tickvals=[n_rows - 1 - i for i in range(n_rows)],
+    ticktext=resources,
+    autorange=False,
+    range=[-0.5, n_rows - 0.5],
+    title_text="",
+    tickfont=dict(color="#0B1D3A", size=12, family="Arial"),
+    gridcolor="rgba(0,0,0,0)",  # no horizontal grid lines
+)
+
+fig.update_xaxes(
+    tickformat="%b %d %Y",
+    tickfont=dict(color="#0B1D3A", size=11, family="Arial"),
+    title_text="Date",
+    title_font=dict(color="#0B1D3A", size=14, family="Arial"),
+    showgrid=True,
+    gridcolor="rgba(200,200,200,0.2)"
+)
+
+fig.update_layout(
+    height=max(400, 80 * n_rows),  # 80 px per row minimum
+    margin=dict(l=10, r=10, t=50, b=50),
+    plot_bgcolor="#FFFFFF",   # white “track” area
+    paper_bgcolor="rgba(0,0,0,0)",  # transparent behind
+    title=dict(text=f"Gantt Chart ► {proj.name}", font_size=20, font_color="#0B1D3A", x=0.01),
+    showlegend=False
+)
+
+# 9) Finally, send it to Streamlit
+st.plotly_chart(fig, use_container_width=True)
