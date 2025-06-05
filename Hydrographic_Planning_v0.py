@@ -40,7 +40,7 @@ COLOR_MAP = {
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
-# INJECT CUSTOM CSS (all fixes 1–10)
+# INJECT CUSTOM CSS (all fixes: immediate input focus, button/text color, etc.)
 # ────────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Hydrographic Survey Estimator",
@@ -114,7 +114,7 @@ st.markdown(
             padding: 8px !important;
             width: 100% !important;
         }
-        /* 6a) “Add Vessel” & “Add Task” button: dark-navy text on white box */
+        /* 6a) “Add Vessel” & “Add Task” buttons: dark-navy text on white box */
         .add-form-button .stButton > button {
             background: #FFFFFF !important;
             color: #0B1D3A !important;
@@ -178,7 +178,7 @@ st.markdown(
             color: #FFFFFF !important;
             font-weight: 500 !important;
         }
-        /* 9) Gantt chart: set legend & text to dark-navy */
+        /* 9) Gantt chart: legend & text dark-navy */
         .js-plotly-plot .legendtext {
             fill: #0B1D3A !important;
         }
@@ -622,7 +622,7 @@ st.markdown(
 with st.expander("📝 Add New Task", expanded=False):
     st.markdown('<div class="add-form-button">', unsafe_allow_html=True)
     with st.form("task_form"):
-        # First: Task Type (so we can use it to default the Task Name below)
+        # First: Task Type (auto‐populate Task Name)
         task_type = st.selectbox(
             "Task Type*",
             [
@@ -661,7 +661,6 @@ with st.expander("📝 Add New Task", expanded=False):
             vessel_options = [("Unassigned", None)] + [
                 (v.name, v.id) for v in current_project.vessels
             ]
-            sel_vessel_idx = 0
             sel_vessel = st.selectbox(
                 "Assign to Vessel",
                 options=vessel_options,
@@ -670,7 +669,7 @@ with st.expander("📝 Add New Task", expanded=False):
             )
             pause_survey = st.checkbox("Pause Survey Operations", key="new_task_pause")
         with col2:
-            st.write("")  # just spacing
+            st.write("")
             st.write("")
 
         add_task_btn = st.form_submit_button("Add Task")
