@@ -603,6 +603,7 @@ if st.session_state.get("editing_vessel"):
                             maintenance_unit=new_maint_unit,
                             id=to_edit.id
                         )
+                        # Replace the old vessel with updated one
                         current_project.vessels = [
                             x for x in current_project.vessels if x.id != to_edit.id
                         ] + [updated_v]
@@ -994,7 +995,7 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                 st.error(f"Error importing: {e}")
 
 # ────────────────────────────────────────────────────────────────────────────────
-# SECTION 5) PROJECT TIMELINE (GANTT CHART) — with date ticks & visible legend
+# SECTION 5) PROJECT TIMELINE (GANTT CHART)
 # ────────────────────────────────────────────────────────────────────────────────
 st.markdown('<div class="section-header">5) Project Timeline (Gantt Chart)</div>', unsafe_allow_html=True)
 
@@ -1020,11 +1021,11 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
             t_end   = pd.to_datetime(t.end_date)
             if t_start > cur_start:
                 rows.append({
-                    "Task":    f"Survey ► {v.name}",
-                    "Start":   cur_start,
-                    "Finish":  t_start,
+                    "Task":     f"Survey ► {v.name}",
+                    "Start":    cur_start,
+                    "Finish":   t_start,
                     "Resource": v.name,
-                    "Type":    "Survey"
+                    "Type":     "Survey"
                 })
             rows.append({
                 "Task":     t.name,
@@ -1138,22 +1139,27 @@ else:
             )
         )
 
-    # Layout adjustments: keep a white plot‐area, dark outer background,
-    # push the legend above the bars, and force the x‐axis to be a date axis.
+    # Layout adjustments: 
+    #  • plot_bgcolor="#FFFFFF", paper_bgcolor transparent 
+    #  • legend above chart 
+    #  • enforce dtick so x-axis always shows date labels 
+    #  • set barmode="overlay" so overlapping bars in the same row don’t stack
     fig.update_layout(
         height=max(400, 80 * n_rows),
         margin=dict(l=10, r=10, t=120, b=50),
         plot_bgcolor="#FFFFFF",
         paper_bgcolor="rgba(0,0,0,0)",
 
-        # Legend: horizontal, above the chart, on a white background so it's visible
+        barmode="overlay",  # Overlap bars on the same row instead of stacking
+
+        # Legend: horizontal, above the chart:
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.08,               # push it above the plot area
+            y=1.08,
             xanchor="center",
             x=0.5,
-            bgcolor="rgba(255,255,255,1)",   # solid white behind legend
+            bgcolor="rgba(255,255,255,1)",
             bordercolor="#CCCCCC",
             borderwidth=1,
             font=dict(color="#0B1D3A", size=14)
@@ -1167,7 +1173,7 @@ else:
         )
     )
 
-    # Y‐axis: list each Resource (vessel/unassigned) on left, in dark navy
+    # Y‐axis: show each Resource name on the left
     fig.update_yaxes(
         tickmode="array",
         tickvals=[n_rows - 1 - i for i in range(n_rows)],
@@ -1179,15 +1185,19 @@ else:
         gridcolor="rgba(0,0,0,0)"
     )
 
-    # X‐axis: enforce type='date', show ticks in “MMM DD, YYYY” format
+    # X‐axis: force date type, angle labels, add ticks even if only one bar
     fig.update_xaxes(
         type="date",
         tickformat="%b %d, %Y",
+        tickangle=-45,
+        showgrid=True,
+        gridcolor="rgba(200,200,200,0.2)",
+        ticks="outside",
         tickfont=dict(color="#0B1D3A", size=14, family="Arial"),
         title_text="Date",
         title_font=dict(color="#0B1D3A", size=16, family="Arial"),
-        showgrid=True,
-        gridcolor="rgba(200,200,200,0.2)"
+        rangemode="normal",
+        dtick="M1"  # ← Force a monthly tick so at least one date appears
     )
 
     # Finally render it full‐width
