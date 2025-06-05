@@ -1090,10 +1090,10 @@ else:
         title_font=dict(color="#0B1D3A")
     )
 
-    # Layout: dark‐navy title & labels
+    # Layout: dark‐navy title & labels, and WHITE chart background
     fig.update_layout(
         height=max(400, len(proj.vessels) * 100 + len(proj.tasks) * 50),
-        plot_bgcolor="rgba(255,255,255,0.1)",
+        plot_bgcolor="white",           # ← changed: chart plot area is now pure white
         paper_bgcolor="rgba(0,0,0,0)",
         font_color="#0B1D3A",
         title_font=dict(color="#0B1D3A", size=20),
