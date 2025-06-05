@@ -611,7 +611,6 @@ if st.session_state.get("editing_vessel"):
                             maintenance_unit=new_maint_unit,
                             id=to_edit.id
                         )
-                        # Replace in‐place
                         current_project.vessels = [
                             x for x in current_project.vessels if x.id != to_edit.id
                         ] + [updated_v]
@@ -1110,17 +1109,29 @@ else:
         gridcolor="rgba(200,200,200,0.2)"
     )
 
-    # Draw a vertical “Today” line (dashed red)
-    # Use a pandas Timestamp so Plotly can compute _mean without error
-    today_ts = pd.to_datetime(datetime.date.today())
-    fig.add_vline(
-        x=today_ts,
-        line_dash="dash",
-        line_color="#DB504A",
-        annotation_text="Today",
-        annotation_position="top left",
-        annotation_font_color="#DB504A",
-        annotation_font_size=12
+    # ────────────────────────────────────────────────────────────────────────────
+    # Draw a vertical “Today” line (dashed red) via add_shape + annotation.
+    # We pass a string (YYYY-MM-DD) so Plotly does not attempt to sum two Timestamps.
+    # ────────────────────────────────────────────────────────────────────────────
+    today_str = datetime.date.today().isoformat()  # e.g. "2025-06-05"
+    fig.add_shape(
+        type="line",
+        x0=today_str,
+        x1=today_str,
+        y0=0,
+        y1=1,
+        xref="x",
+        yref="paper",
+        line=dict(color="#DB504A", dash="dash")
+    )
+    fig.add_annotation(
+        x=today_str,
+        y=1.02,
+        xref="x",
+        yref="paper",
+        text="Today",
+        showarrow=False,
+        font=dict(color="#DB504A", size=12)
     )
 
     # Update traces to show text inside each bar
