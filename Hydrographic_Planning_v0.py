@@ -12,13 +12,13 @@ from typing import List, Dict, Optional
 # ────────────────────────────────────────────────────────────────────────────────
 def init_session_state():
     if "projects" not in st.session_state:
-        st.session_state["projects"] = []                # List of Project objects
+        st.session_state["projects"] = []  # List of Project objects
     if "current_project_id" not in st.session_state:
-        st.session_state["current_project_id"] = None     # ID of the currently selected Project
+        st.session_state["current_project_id"] = None
     if "editing_vessel" not in st.session_state:
-        st.session_state["editing_vessel"] = None         # vessel_id being edited
+        st.session_state["editing_vessel"] = None  # vessel_id being edited
     if "editing_task" not in st.session_state:
-        st.session_state["editing_task"] = None           # task_id being edited
+        st.session_state["editing_task"] = None    # task_id being edited
 
 init_session_state()
 
@@ -40,7 +40,7 @@ COLOR_MAP = {
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
-# INJECT CUSTOM CSS (input focus, button/text color, etc.)
+# INJECT CUSTOM CSS (all fixes: immediate input focus, button/text color, etc.)
 # ────────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Hydrographic Survey Estimator",
@@ -178,6 +178,13 @@ st.markdown(
             color: #FFFFFF !important;
             font-weight: 500 !important;
         }
+        /* 9) Gantt chart: legend & text dark-navy */
+        .js-plotly-plot .legendtext {
+            fill: #0B1D3A !important;
+        }
+        .js-plotly-plot .traces text {
+            fill: #0B1D3A !important;
+        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -210,7 +217,7 @@ class Vessel:
         self.weather_days = self._convert_to_days(weather, weather_unit)
         self.maintenance_days = self._convert_to_days(maintenance, maintenance_unit)
 
-        # Survey days = vessel_km / (speed * 24)
+        # Survey days = (vessel_km) / (speed * 24)
         self.survey_days = round(self.vessel_km / (DEFAULT_SURVEY_SPEED * 24), 2)
         self.total_days = round(
             self.survey_days + self.transit_days + self.weather_days + self.maintenance_days, 2
@@ -487,41 +494,35 @@ with st.expander("🚢 Add New Vessel", expanded=False):
                 st.success(f"Vessel '{vessel_name.strip()}' added!")
     st.markdown('</div>', unsafe_allow_html=True)
 
-if not current_project.vessels:
-    st.markdown(
-        '<span style="color:#FFFFFF;">No vessels added yet to this project.</span>',
-        unsafe_allow_html=True
-    )
-else:
-    # — Display Existing Vessels
-    for v in current_project.vessels:
-        with st.container():
-            c1, c2, c3 = st.columns([3, 1, 1])
-            with c1:
-                st.markdown(
-                    f"""
-                    <div class="card">
-                        <h4><i class="fas fa-ship"></i> {v.name}</h4>
-                        <p><strong>Survey:</strong> {v.vessel_km} km</p>
-                        <p><strong>Schedule:</strong> {v.start_date} &rarr; {v.end_date} ({v.total_days} days)</p>
-                        <p><strong>Breakdown:</strong> Survey: {v.survey_days} d |
-                          Transit: {v.transit_days} d |
-                          Weather: {v.weather_days} d |
-                          Maint: {v.maintenance_days} d
-                        </p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-            with c2:
-                if st.button("✏️ Edit", key=f"edit_v_{v.id}"):
-                    st.session_state["editing_vessel"] = v.id
-            with c3:
-                if st.button("🗑️ Delete", key=f"del_v_{v.id}"):
-                    current_project.vessels = [x for x in current_project.vessels if x.id != v.id]
-                    # Remove tasks assigned to this vessel
-                    current_project.tasks = [t for t in current_project.tasks if t.vessel_id != v.id]
-                    st.success(f"Deleted vessel '{v.name}'.")
+# — Display Existing Vessels
+for v in current_project.vessels:
+    with st.container():
+        c1, c2, c3 = st.columns([3, 1, 1])
+        with c1:
+            st.markdown(
+                f"""
+                <div class="card">
+                    <h4><i class="fas fa-ship"></i> {v.name}</h4>
+                    <p><strong>Survey:</strong> {v.vessel_km} km</p>
+                    <p><strong>Schedule:</strong> {v.start_date} &rarr; {v.end_date} ({v.total_days} days)</p>
+                    <p><strong>Breakdown:</strong> Survey: {v.survey_days} d |
+                      Transit: {v.transit_days} d |
+                      Weather: {v.weather_days} d |
+                      Maint: {v.maintenance_days} d
+                    </p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with c2:
+            if st.button("✏️ Edit", key=f"edit_v_{v.id}"):
+                st.session_state["editing_vessel"] = v.id
+        with c3:
+            if st.button("🗑️ Delete", key=f"del_v_{v.id}"):
+                current_project.vessels = [x for x in current_project.vessels if x.id != v.id]
+                # Remove tasks assigned to this vessel
+                current_project.tasks = [t for t in current_project.tasks if t.vessel_id != v.id]
+                st.success(f"Deleted vessel '{v.name}'.")
 
 # — Edit Vessel Expander
 if st.session_state.get("editing_vessel"):
@@ -668,8 +669,8 @@ with st.expander("📝 Add New Task", expanded=False):
             )
             pause_survey = st.checkbox("Pause Survey Operations", key="new_task_pause")
         with col2:
-            st.write("")  # spacer
-            st.write("")  # spacer
+            st.write("")
+            st.write("")
 
         add_task_btn = st.form_submit_button("Add Task")
         if add_task_btn:
@@ -700,38 +701,32 @@ with st.expander("📝 Add New Task", expanded=False):
                 st.success(f"Task '{task_name.strip()}' added!")
     st.markdown('</div>', unsafe_allow_html=True)
 
-if not current_project.tasks:
-    st.markdown(
-        '<span style="color:#FFFFFF;">No tasks added yet to this project.</span>',
-        unsafe_allow_html=True
-    )
-else:
-    # — Display Existing Tasks
-    for t in current_project.tasks:
-        with st.container():
-            d1, d2, d3 = st.columns([3, 1, 1])
-            assigned_name = next(
-                (v.name for v in current_project.vessels if v.id == t.vessel_id),
-                "Unassigned"
+# — Display Existing Tasks
+for t in current_project.tasks:
+    with st.container():
+        d1, d2, d3 = st.columns([3, 1, 1])
+        assigned_name = next(
+            (v.name for v in current_project.vessels if v.id == t.vessel_id),
+            "Unassigned"
+        )
+        with d1:
+            st.markdown(
+                f"""
+                <div class="card">
+                  <strong><i class="fas fa-tasks"></i> {t.name}</strong> ({t.task_type})<br>
+                  <small>{t.start_date} &rarr; {t.end_date} | Vessel: {assigned_name}</small><br>
+                  {("<small style='color:orange;'>⚠️ Pauses Survey</small>" if t.pause_survey else "")}
+                </div>
+                """,
+                unsafe_allow_html=True
             )
-            with d1:
-                st.markdown(
-                    f"""
-                    <div class="card">
-                      <strong><i class="fas fa-tasks"></i> {t.name}</strong> ({t.task_type})<br>
-                      <small>{t.start_date} &rarr; {t.end_date} | Vessel: {assigned_name}</small><br>
-                      {("<small style='color:orange;'>⚠️ Pauses Survey</small>" if t.pause_survey else "")}
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-            with d2:
-                if st.button("✏️ Edit", key=f"edit_t_{t.id}"):
-                    st.session_state["editing_task"] = t.id
-            with d3:
-                if st.button("🗑️ Delete", key=f"del_t_{t.id}"):
-                    current_project.tasks = [x for x in current_project.tasks if x.id != t.id]
-                    st.success(f"Deleted task '{t.name}'.")
+        with d2:
+            if st.button("✏️ Edit", key=f"edit_t_{t.id}"):
+                st.session_state["editing_task"] = t.id
+        with d3:
+            if st.button("🗑️ Delete", key=f"del_t_{t.id}"):
+                current_project.tasks = [x for x in current_project.tasks if x.id != t.id]
+                st.success(f"Deleted task '{t.name}'.")
 
 # — Edit Task Expander
 if st.session_state.get("editing_task"):
@@ -820,8 +815,8 @@ if st.session_state.get("editing_task"):
                         key=f"edit_pause_{to_edit_t.id}"
                     )
                 with colE2:
-                    st.write("")  # spacer
-                    st.write("")  # spacer
+                    st.write("")
+                    st.write("")
 
                 update_task_btn = st.form_submit_button("Update Task")
                 if update_task_btn:
@@ -999,7 +994,7 @@ with st.expander("💾 Export / Import Projects", expanded=False):
                 st.error(f"Error importing: {e}")
 
 # ────────────────────────────────────────────────────────────────────────────────
-# SECTION 5) PROJECT TIMELINE (GANTT CHART) with permanent legend & bar labels
+# SECTION 5) PROJECT TIMELINE (GANTT CHART) — with date ticks & visible legend
 # ────────────────────────────────────────────────────────────────────────────────
 st.markdown('<div class="section-header">5) Project Timeline (Gantt Chart)</div>', unsafe_allow_html=True)
 
@@ -1011,9 +1006,9 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
     rows = []
     for v in vessels:
         survey_start = pd.to_datetime(v.start_date)
-        survey_end = pd.to_datetime(v.end_date)
+        survey_end   = pd.to_datetime(v.end_date)
 
-        # Gather any “pause” tasks for this vessel
+        # Any “pause” tasks for this vessel
         pauses = sorted(
             [t for t in tasks if (t.vessel_id == v.id and t.pause_survey)],
             key=lambda t: pd.to_datetime(t.start_date)
@@ -1022,42 +1017,42 @@ def build_timeline_df(vessels: List[Vessel], tasks: List[Task]) -> pd.DataFrame:
         cur_start = survey_start
         for t in pauses:
             t_start = pd.to_datetime(t.start_date)
-            t_end = pd.to_datetime(t.end_date)
+            t_end   = pd.to_datetime(t.end_date)
             if t_start > cur_start:
                 rows.append({
-                    "Task": f"Survey ► {v.name}",
-                    "Start": cur_start,
-                    "Finish": t_start,
+                    "Task":    f"Survey ► {v.name}",
+                    "Start":   cur_start,
+                    "Finish":  t_start,
                     "Resource": v.name,
-                    "Type": "Survey"
+                    "Type":    "Survey"
                 })
             rows.append({
-                "Task": t.name,
-                "Start": t_start,
-                "Finish": t_end,
+                "Task":     t.name,
+                "Start":    t_start,
+                "Finish":   t_end,
                 "Resource": v.name,
-                "Type": t.task_type
+                "Type":     t.task_type
             })
             cur_start = t_end
 
         if cur_start < survey_end:
             rows.append({
-                "Task": f"Survey ► {v.name}",
-                "Start": cur_start,
-                "Finish": survey_end,
+                "Task":     f"Survey ► {v.name}",
+                "Start":    cur_start,
+                "Finish":   survey_end,
                 "Resource": v.name,
-                "Type": "Survey"
+                "Type":     "Survey"
             })
 
     # Unassigned tasks (no vessel_id)
     for t in tasks:
         if t.vessel_id is None:
             rows.append({
-                "Task": t.name,
-                "Start": pd.to_datetime(t.start_date),
-                "Finish": pd.to_datetime(t.end_date),
+                "Task":     t.name,
+                "Start":    pd.to_datetime(t.start_date),
+                "Finish":   pd.to_datetime(t.end_date),
                 "Resource": "Unassigned",
-                "Type": t.task_type
+                "Type":     t.task_type
             })
 
     return pd.DataFrame(rows)
@@ -1066,34 +1061,34 @@ timeline_df = build_timeline_df(proj.vessels, proj.tasks)
 
 if timeline_df.empty:
     st.markdown(
-        '<span style="color:#FFFFFF;">No timeline data available for this project. Add vessels/tasks above.</span>',
+        '<span style="color:#FFFFFF;">No timeline data available for this project. '
+        'Add vessels/tasks above.</span>',
         unsafe_allow_html=True
     )
 else:
-    # Build the list of distinct Resources (preserve insertion order)
+    # Build a list of distinct Resource names (to get row order)
     resources = timeline_df["Resource"].unique().tolist()
-    n_rows = len(resources)
-    # Map each Resource to a row index (0 = top row)
+    n_rows    = len(resources)
+    # Map each Resource → a Y‐index (0 at top)
     row_positions = {res: idx for idx, res in enumerate(resources)}
 
-    # Create the figure
     fig = go.Figure()
 
-    # 1) Alternating "lane" backgrounds (optional; comment out if you don't want stripes)
+    # (Optional) Draw alternating “lane” backgrounds for each row
     for res, idx in row_positions.items():
         lane_color = "#F2F2F2" if (idx % 2 == 0) else "#FFFFFF"
         fig.add_shape(
             type="rect",
             xref="x", yref="y",
-            x0=timeline_df["Start"].min() - pd.Timedelta(days=7),
-            x1=timeline_df["Finish"].max() + pd.Timedelta(days=7),
+            x0=timeline_df["Start"].min() - pd.Timedelta(days=3),
+            x1=timeline_df["Finish"].max()  + pd.Timedelta(days=3),
             y0=idx - 0.4, y1=idx + 0.4,
             fillcolor=lane_color,
             line_width=0,
             layer="below"
         )
 
-    # 2) "Today" vertical line (dashed red), so you always see current date reference
+    # Draw a “Today” line in dashed red
     today_date = pd.to_datetime(datetime.date.today())
     fig.add_shape(
         type="line",
@@ -1103,41 +1098,36 @@ else:
         layer="above"
     )
 
-    # 3) Add one Bar per row in timeline_df
+    # Add one horizontal Bar for each row in timeline_df
     seen_types = set()
     for _, row in timeline_df.iterrows():
         y_idx     = row_positions[row["Resource"]]
         bar_color = COLOR_MAP.get(row["Type"], COLOR_MAP["Other"])
         bar_name  = row["Type"]
 
-        # Only show a legend entry the very first time this Type appears
+        # Only show the legend once per Type
         first_time = (bar_name not in seen_types)
         if first_time:
             seen_types.add(bar_name)
 
         fig.add_trace(
             go.Bar(
-                x=[row["Finish"]],             # finish date
-                base=[row["Start"]],           # start date
-                y=[n_rows - 1 - y_idx],        # invert y so 0 is top row
+                x=[row["Finish"]],           # bar “end” date
+                base=[row["Start"]],         # bar “start” date
+                y=[n_rows - 1 - y_idx],      # invert Y so 0 is at top
                 orientation="h",
                 marker_color=bar_color,
                 marker_line_width=0,
                 width=0.5,
-                name=bar_name,                 # used for legend
-                showlegend=first_time,         # only True for first occurrence
+                name=bar_name,
+                showlegend=first_time,
 
-                # ── Label each bar with its Task name ──
+                # Label the bar with its Task name, inside the bar
                 text=[row["Task"]],
                 textposition="inside",
                 insidetextanchor="middle",
-                textfont=dict(
-                    color="#FFFFFF",
-                    size=14,
-                    family="Arial"
-                ),
+                textfont=dict(color="#FFFFFF", size=14, family="Arial"),
 
-                # ── Custom hovertemplate (optional, but keeps consistency) ──
                 hovertemplate=(
                     "<b>%{customdata[0]}</b><br>"
                     "Type: %{customdata[1]}<br>"
@@ -1148,20 +1138,24 @@ else:
             )
         )
 
-    # 4) Configure the layout: white plot background, dark-navy outer, legend above, etc.
+    # Layout adjustments: keep a white plot‐area, dark outer background,
+    # push the legend above the bars, and force the x‐axis to be a date axis.
     fig.update_layout(
         height=max(400, 80 * n_rows),
-        margin=dict(l=10, r=10, t=80, b=50),
+        margin=dict(l=10, r=10, t=120, b=50),
         plot_bgcolor="#FFFFFF",
         paper_bgcolor="rgba(0,0,0,0)",
 
-        # Legend horizontally above the bars
+        # Legend: horizontal, above the chart, on a white background so it's visible
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.02,
+            y=1.08,               # push it above the plot area
             xanchor="center",
             x=0.5,
+            bgcolor="rgba(255,255,255,1)",   # solid white behind legend
+            bordercolor="#CCCCCC",
+            borderwidth=1,
             font=dict(color="#0B1D3A", size=14)
         ),
 
@@ -1173,7 +1167,7 @@ else:
         )
     )
 
-    # 5) Y‐axis: Resource names on the left
+    # Y‐axis: list each Resource (vessel/unassigned) on left, in dark navy
     fig.update_yaxes(
         tickmode="array",
         tickvals=[n_rows - 1 - i for i in range(n_rows)],
@@ -1185,8 +1179,9 @@ else:
         gridcolor="rgba(0,0,0,0)"
     )
 
-    # 6) X‐axis: render a proper date axis with month/day/year; larger font
+    # X‐axis: enforce type='date', show ticks in “MMM DD, YYYY” format
     fig.update_xaxes(
+        type="date",
         tickformat="%b %d, %Y",
         tickfont=dict(color="#0B1D3A", size=14, family="Arial"),
         title_text="Date",
@@ -1195,5 +1190,5 @@ else:
         gridcolor="rgba(200,200,200,0.2)"
     )
 
-    # 7) Finally display the figure, allowing Streamlit to expand it full‐width
+    # Finally render it full‐width
     st.plotly_chart(fig, use_container_width=True)
